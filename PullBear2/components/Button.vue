@@ -143,7 +143,7 @@ export default {
 .top-right-button {
   position: absolute;
   top: 10px;
-  right: 10px;
+  right: 110px;
   padding: 5px 20px;
   display: absolute;
   align-items: center;

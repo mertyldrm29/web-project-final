@@ -26,7 +26,7 @@
               ></path>
             </svg>
           </span>
-          <span class="count">Sepet ({{ cartItems.length }})</span>
+          <span class="count">Sepet</span>
         </span>
       </button>
   
@@ -80,7 +80,7 @@
   .cart-container {
     position: fixed;
     right: 10px;
-    top: 60px;
+    top: 15px;
     z-index: 998;
   }
   

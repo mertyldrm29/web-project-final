@@ -25,10 +25,15 @@
   
   <style scoped>
   .search-container {
-    display: flex;
+    display: absolute;
     align-items: center;
     justify-content: center;
     padding: 5px;
+    position: absolute;
+    right: 180px;
+    top: -1px;
+
+
   }
   
   .search-input {
@@ -36,7 +41,7 @@
     border: 1px solid #ccc;
     border-radius: 50px; /* Oval şekil */
     outline: none;
-    width: 300px;
+    width: 100px;
     transition: border-color 0.3s ease;
   }
   
@@ -45,7 +50,7 @@
   }
   
   .search-button {
-    display: flex;
+    display: absolute;
     align-items: center;
     justify-content: center;
     background: #000000;
