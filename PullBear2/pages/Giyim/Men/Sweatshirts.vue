@@ -9,7 +9,8 @@
         <h1>Erkek Sweatshirt Koleksiyonu</h1>
     </div>
     <div class="products-section">
-        <Products :gender="'men'" :defaultCategory="'sweatshirts'" />
+        <Filter6 @filter-changed="handleFilterChange" />
+        <Products :defaultGender="'men'" :defaultCategory="'sweatshirts'" :defaultSubSweatshirts="subSweatshirts" />
     </div>
     <Button />
     <Sepet />
@@ -19,6 +20,7 @@
 <script>
 import Menu from '../../components/Menu.vue';
 import Products from '../../components/Products.vue';
+import Filter6 from '../../components/Filter6.vue';
 import Button from '../../components/Button.vue';
 import Sepet from '../../components/Sepet.vue';
 import Footer from '../../components/Footer.vue';
@@ -28,10 +30,21 @@ export default {
     components: {
         Menu,
         Products,
+        Filter6,
         Button,
         Sepet,
         Footer
+    },
+    data() {
+    return {
+      subSweatshirts: 'all'
     }
+  },
+  methods: {
+    handleFilterChange(filter6) {
+      this.subSweatshirts = filter6;
+    }
+  }
 }
 </script>
 
