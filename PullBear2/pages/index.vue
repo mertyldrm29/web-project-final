@@ -4,8 +4,8 @@
     <div class="logo-container">
       <img src="https://static.pullandbear.net/2/static2/img/headLogo/logo_pull_black_new.svg" alt="Logo" class="logo" />
     </div>
-    <Button />
-    <Sepet />
+    <Button @user-logged-in="handleUserLogin" @user-logged-out="handleUserLogout" />
+    <Sepet ref="sepetComponent" />
     <Menu />
     <Search />
     <ImageWithButton />
@@ -46,6 +46,28 @@ import Influencer from "@/components/Influencer.vue";
 import Products from "@/components/Products.vue";
 import Video from "@/components/Video.vue";
 import Subscription from "@/components/Subscription.vue";
+
+const handleUserLogin = (user) => {
+  // Sepet bileşenine kullanıcı bilgisini ilet
+  if (sepetComponent.value) {
+    sepetComponent.value.handleUserLogin(user);
+  }
+};
+
+const handleUserLogout = () => {
+  // Sepet bileşenine çıkış yapıldığını bildir
+  if (sepetComponent.value) {
+    sepetComponent.value.handleUserLogout();
+  }
+};
+
+const sepetComponent = ref(null);
+
+// Sayfa yüklendiğinde localStorage'dan kullanıcı bilgilerini kontrol et
+const savedUser = localStorage.getItem('loggedInUser');
+if (savedUser && sepetComponent.value) {
+  sepetComponent.value.handleUserLogin(JSON.parse(savedUser));
+}
 </script>
 
 <style scoped>
