@@ -52,14 +52,85 @@
         </div>
 
         <!-- Siparişlerim Ekranı -->
-        <div v-else-if="currentPage === 'orders'">
-          <h3>Herhangi Bir Siparişiniz Bulunmamaktadır.</h3>
+        <div v-else-if="currentPage === 'orders'" class="orders-page">
+          <h3>Siparişlerim</h3>
+          <div v-if="userOrders.length === 0" class="no-orders">
+            <p>Herhangi Bir Siparişiniz Bulunmamaktadır.</p>
+          </div>
+          <div v-else class="orders-list">
+            <div v-for="order in userOrders" :key="order.id" class="order-item">
+              <div class="order-header">
+                <p class="order-date">Sipariş Tarihi: {{ formatDate(order.orderDate) }}</p>
+                <div class="order-actions">
+                  <p class="order-total">Toplam Tutar: {{ order.totalAmount }} TL</p>
+                  <div v-if="isOrderFullyReturned(order.id)" class="return-status fully-returned">
+                    Tüm Ürünler İade Edildi
+                  </div>
+                  <button 
+                    v-else-if="canReturn(order.orderDate) && !isOrderFullyReturned(order.id)" 
+                    @click="returnEntireOrder(order)" 
+                    class="return-btn"
+                  >
+                    Tüm Siparişi İade Et
+                  </button>
+                </div>
+              </div>
+              <div class="order-products">
+                <div v-for="item in order.items" :key="item.productId" class="order-product">
+                  <img :src="item.image" :alt="item.name" class="product-image">
+                  <div class="product-details">
+                    <div class="product-header">
+                      <h4>{{ item.name }}</h4>
+                      <div 
+                        v-if="isProductReturned(order.id, item.productId)" 
+                        class="return-status"
+                      >
+                        İade Edildi
+                      </div>
+                    </div>
+                    <p>Adet: {{ item.quantity }}</p>
+                    <p>Birim Fiyat: {{ item.price }} TL</p>
+                    <p>Toplam: {{ item.totalPrice }} TL</p>
+                    <button 
+                      v-if="canReturn(order.orderDate) && !isProductReturned(order.id, item.productId)" 
+                      @click="returnItem(order, item)" 
+                      class="return-item-btn"
+                    >
+                      İade Et
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <button @click="goBack" class="back-button">Geri</button>
         </div>
 
         <!-- İadeler Ekranı -->
-        <div v-else-if="currentPage === 'returns'">
-          <h3>Herhangi Bir İadeniz Bulunmamaktadır.</h3>
+        <div v-else-if="currentPage === 'returns'" class="returns-page">
+          <h3>İadelerim</h3>
+          <div v-if="userReturns.length === 0" class="no-returns">
+            <p>Herhangi Bir İadeniz Bulunmamaktadır.</p>
+          </div>
+          <div v-else class="returns-list">
+            <div v-for="return_ in userReturns" :key="return_.id" class="return-item">
+              <div class="return-header">
+                <p class="return-date">İade Tarihi: {{ formatDate(return_.returnDate) }}</p>
+                <p class="return-total">İade Tutarı: {{ return_.totalAmount }} TL</p>
+              </div>
+              <div class="return-products">
+                <div v-for="item in return_.items" :key="item.productId" class="return-product">
+                  <img :src="item.image" :alt="item.name" class="product-image">
+                  <div class="product-details">
+                    <h4>{{ item.name }}</h4>
+                    <p>Adet: {{ item.quantity }}</p>
+                    <p>Birim Fiyat: {{ item.price }} TL</p>
+                    <p>Toplam: {{ item.totalPrice }} TL</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <button @click="goBack" class="back-button">Geri</button>
         </div>
 
@@ -79,7 +150,7 @@
 import LoginForm from "./LoginForm.vue";
 import RegisterForm from "./RegisterForm.vue";
 import { useNuxtApp } from '#app';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export default {
   data() {
@@ -87,6 +158,8 @@ export default {
       showModal: false,
       currentPage: null,
       loggedInUser: null,
+      userOrders: [],
+      userReturns: [],
     };
   },
   methods: {
@@ -96,11 +169,13 @@ export default {
     openRegister() {
       this.currentPage = "register";
     },
-    openOrdersPage() {
+    async openOrdersPage() {
       this.currentPage = "orders";
+      await this.loadUserOrders();
     },
-    openReturnsPage() {
+    async openReturnsPage() {
       this.currentPage = "returns";
+      await this.loadUserReturns();
     },
     openCServicesPage() {
       this.currentPage = "customer-services";
@@ -120,6 +195,11 @@ export default {
         
         if (userDoc.exists()) {
           this.loggedInUser = { id: userDoc.id, ...userDoc.data() };
+          // Kullanıcı bilgilerini localStorage'a kaydet
+          localStorage.setItem('loggedInUser', JSON.stringify(this.loggedInUser));
+          // Üst komponente kullanıcı bilgisini ilet
+          this.$emit('user-logged-in', this.loggedInUser);
+          
           alert(`Giriş başarılı! Hoşgeldiniz, ${this.loggedInUser.name} ${this.loggedInUser.surname}`);
           this.goBack();
         } else {
@@ -136,9 +216,212 @@ export default {
     },
     logout() {
       this.loggedInUser = null;
+      // localStorage'dan kullanıcı bilgilerini sil
+      localStorage.removeItem('loggedInUser');
+      // Üst komponente çıkış yapıldığını bildir
+      this.$emit('user-logged-out');
       alert("Çıkış yapıldı!");
       this.closeModal();
     },
+    // Sayfa yüklendiğinde localStorage'dan kullanıcı bilgilerini kontrol et
+    checkLoggedInUser() {
+      const savedUser = localStorage.getItem('loggedInUser');
+      if (savedUser) {
+        this.loggedInUser = JSON.parse(savedUser);
+        // Üst komponente kullanıcı bilgisini ilet
+        this.$emit('user-logged-in', this.loggedInUser);
+      }
+    },
+    async loadUserOrders() {
+      if (!this.loggedInUser) return;
+
+      try {
+        const { $db } = useNuxtApp();
+        const ordersRef = collection($db, 'orders');
+        const q = query(ordersRef, where('userId', '==', this.loggedInUser.id));
+        const querySnapshot = await getDocs(q);
+        
+        this.userOrders = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          orderDate: doc.data().orderDate.toDate()
+        }));
+
+        // Siparişleri tarihe göre sırala (en yeniden en eskiye)
+        this.userOrders.sort((a, b) => b.orderDate - a.orderDate);
+      } catch (error) {
+        console.error('Siparişler yüklenirken hata:', error);
+      }
+    },
+    formatDate(date) {
+      return new Date(date).toLocaleDateString('tr-TR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    },
+    canReturn(orderDate) {
+      const now = new Date();
+      const orderTime = new Date(orderDate);
+      const diffInMinutes = (now - orderTime) / (1000 * 60);
+      return diffInMinutes <= 1;
+    },
+    async returnItem(order, item) {
+      if (!this.canReturn(order.orderDate)) {
+        alert('Sipariş Verildikten 1 Dakika Sonra İade Edilemez');
+        return;
+      }
+
+      try {
+        const { $db } = useNuxtApp();
+        
+        // İade kaydı oluştur
+        const returnData = {
+          userId: this.loggedInUser.id,
+          orderId: order.id,
+          items: [{
+            productId: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            totalPrice: item.totalPrice
+          }],
+          totalAmount: item.totalPrice,
+          returnDate: new Date(),
+          orderDate: order.orderDate,
+          status: 'completed'
+        };
+
+        // Önce iade kaydını oluştur
+        await addDoc(collection($db, 'returns'), returnData);
+
+        // Siparişten ürünü kaldır
+        const updatedItems = order.items.filter(i => i.productId !== item.productId);
+        const updatedTotalAmount = order.totalAmount - item.totalPrice;
+
+        if (updatedItems.length === 0) {
+          // Tüm ürünler iade edildiyse siparişi sil
+          await deleteDoc(doc($db, 'orders', order.id));
+        } else {
+          // Siparişi güncelle
+          await updateDoc(doc($db, 'orders', order.id), {
+            items: updatedItems,
+            totalAmount: updatedTotalAmount
+          });
+        }
+
+        // Siparişleri ve iadeleri yeniden yükle
+        await this.loadUserOrders();
+        await this.loadUserReturns();
+        
+        alert('Ürün başarıyla iade edildi.');
+      } catch (error) {
+        console.error('İade işlemi sırasında hata:', error);
+        alert('İade işlemi sırasında bir hata oluştu: ' + error.message);
+      }
+    },
+    async returnEntireOrder(order) {
+      if (!this.canReturn(order.orderDate)) {
+        alert('Sipariş Verildikten 5 Dakika Sonra İade Edilemez');
+        return;
+      }
+
+      try {
+        const { $db } = useNuxtApp();
+        
+        // İade kaydı oluştur
+        const returnData = {
+          userId: this.loggedInUser.id,
+          orderId: order.id,
+          items: order.items.map(item => ({
+            productId: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            totalPrice: item.totalPrice
+          })),
+          totalAmount: order.totalAmount,
+          returnDate: new Date(),
+          orderDate: order.orderDate,
+          status: 'completed'
+        };
+
+        // Önce iade kaydını oluştur
+        await addDoc(collection($db, 'returns'), returnData);
+
+        // Sonra siparişi sil
+        await deleteDoc(doc($db, 'orders', order.id));
+
+        // Siparişleri ve iadeleri yeniden yükle
+        await this.loadUserOrders();
+        await this.loadUserReturns();
+        
+        alert('Sipariş başarıyla iade edildi.');
+      } catch (error) {
+        console.error('İade işlemi sırasında hata:', error);
+        alert('İade işlemi sırasında bir hata oluştu: ' + error.message);
+      }
+    },
+    async loadUserReturns() {
+      if (!this.loggedInUser) return;
+
+      try {
+        const { $db } = useNuxtApp();
+        const returnsRef = collection($db, 'returns');
+        const q = query(returnsRef, where('userId', '==', this.loggedInUser.id));
+        const querySnapshot = await getDocs(q);
+        
+        this.userReturns = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            returnDate: data.returnDate.toDate(),
+            orderDate: data.orderDate.toDate()
+          };
+        });
+
+        // İadeleri tarihe göre sırala (en yeniden en eskiye)
+        this.userReturns.sort((a, b) => b.returnDate - a.returnDate);
+      } catch (error) {
+        console.error('İadeler yüklenirken hata:', error);
+      }
+    },
+    // Ürünün iade edilip edilmediğini kontrol et
+    isProductReturned(orderId, productId) {
+      return this.userReturns.some(return_ => 
+        return_.orderId === orderId && 
+        return_.items.some(item => item.productId === productId)
+      );
+    },
+    // Siparişin tamamen iade edilip edilmediğini kontrol et
+    isOrderFullyReturned(orderId) {
+      const returns = this.userReturns.filter(return_ => return_.orderId === orderId);
+      if (returns.length === 0) return false;
+
+      // Tüm iade edilen ürünlerin ID'lerini topla
+      const returnedProductIds = returns.flatMap(return_ => 
+        return_.items.map(item => item.productId)
+      );
+
+      // İlgili siparişi bul
+      const order = this.userOrders.find(order => order.id === orderId);
+      if (!order) return false;
+
+      // Siparişteki tüm ürünlerin iade edilip edilmediğini kontrol et
+      return order.items.every(item => returnedProductIds.includes(item.productId));
+    },
+  },
+  mounted() {
+    this.checkLoggedInUser();
+    // Eğer kullanıcı giriş yapmışsa iadeleri yükle
+    if (this.loggedInUser) {
+        this.loadUserReturns();
+    }
   },
   components: {
     LoginForm,
@@ -187,7 +470,7 @@ export default {
   padding: 20px;
   border-radius: 10px;
   text-align: center;
-  width: 300px;
+  width: 500px;
   display: flex;
   flex-direction: column;
   justify-content: center; /* Dikey ortalama */
@@ -233,7 +516,7 @@ export default {
   cursor: pointer;
   margin: 10px 0;
   font-size: 16px;
-  width: 80%;
+  width: 90%;
 
 }
 
@@ -292,5 +575,233 @@ export default {
   border-radius: 5px;
   cursor: pointer;
   margin-top: 20px;
+}
+
+.orders-page {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 20px;
+  max-height: 80vh; /* Maksimum yükseklik ekle */
+  overflow-y: auto; /* Dikey scroll ekle */
+}
+
+.no-orders {
+  text-align: center;
+  padding: 20px;
+  background-color: #f8f8f8;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding-right: 10px; /* Scroll çubuğu için boşluk */
+}
+
+.order-item {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #fff;
+  min-width: 0; /* Taşmayı önle */
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 10px;
+  flex-wrap: wrap; /* Uzun içerik için satır atlama */
+  gap: 10px;
+}
+
+.order-date {
+  color: #666;
+  font-size: 0.9em;
+}
+
+.order-total {
+  font-weight: bold;
+  white-space: nowrap; /* Fiyat tek satırda kalsın */
+}
+
+.order-products {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-product {
+  display: flex;
+  gap: 15px;
+  padding: 10px;
+  background-color: #f8f8f8;
+  border-radius: 4px;
+  min-width: 0; /* Taşmayı önle */
+}
+
+.product-image {
+  width: 80px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0; /* Resim boyutu sabit kalsın */
+}
+
+.product-details {
+  flex: 1;
+  min-width: 0; /* Taşmayı önle */
+  overflow: hidden; /* Taşan içeriği gizle */
+}
+
+.product-details h4 {
+  margin: 0 0 5px 0;
+  font-size: 0.95em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.product-details p {
+  margin: 3px 0;
+  color: #666;
+  font-size: 0.9em;
+}
+
+/* Scroll çubuğu stilleri */
+.orders-page::-webkit-scrollbar {
+  width: 6px;
+}
+
+.orders-page::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.orders-page::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.orders-page::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.return-btn {
+  padding: 5px 10px;
+  background-color: #ff4d4d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-left: 10px;
+}
+
+.return-item-btn {
+  padding: 5px 10px;
+  background-color: #ff4d4d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-top: 5px;
+}
+
+.order-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.returns-page {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 20px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.no-returns {
+  text-align: center;
+  padding: 20px;
+  background-color: #f8f8f8;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.returns-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding-right: 10px;
+}
+
+.return-item {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #fff;
+}
+
+.return-header {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 10px;
+}
+
+.return-products {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.return-product {
+  display: flex;
+  gap: 15px;
+  padding: 10px;
+  background-color: #f8f8f8;
+  border-radius: 4px;
+}
+
+.product-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.return-status {
+  font-size: 0.8em;
+  color: #ff4d4d;
+  background-color: #e8f5e9;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.return-total{
+  color: #43e26d;
+  margin-left: 10px;
+  }
+
+.return-status.fully-returned {
+  font-size: 0.9em;
+  padding: 4px 12px;
+  margin-left: 10px;
+}
+
+.product-details h4 {
+  margin: 0;
+  font-size: 0.95em;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
