@@ -59,38 +59,71 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useNuxtApp } from 'nuxt/app'
+import { collection, addDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore'
+
+const { $db } = useNuxtApp()
 
 const email = ref('')
 const unsubscribeEmail = ref('')
-const subscribedEmails = ref([])
 const showTermsPopup = ref(false)
 const showUnsubscribeForm = ref(false)
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (email.value && isValidEmail(email.value)) {
-    if (subscribedEmails.value.includes(email.value)) {
+    try {
+      // E-posta adresinin zaten kayıtlı olup olmadığını kontrol et
+      const subscribersRef = collection($db, 'subscribers')
+      const q = query(subscribersRef, where('email', '==', email.value))
+      const querySnapshot = await getDocs(q)
+
+      if (!querySnapshot.empty) {
+        alert('Bu e-posta adresi zaten kayıtlı!')
         email.value = ''
-      alert('Kullanıcı Zaten Kayıtlı!')
-      return
+        return
+      }
+
+      // Yeni abone ekle
+      await addDoc(collection($db, 'subscribers'), {
+        email: email.value,
+        subscribedAt: new Date(),
+        status: 'active'
+      })
+
+      email.value = ''
+      alert('Başarıyla kaydoldunuz!')
+    } catch (error) {
+      console.error('Abonelik hatası:', error)
+      alert('Bir hata oluştu. Lütfen tekrar deneyin.')
     }
-    subscribedEmails.value.push(email.value)
-    email.value = ''
-    alert('Başarıyla kaydoldunuz!')
   }
 }
 
-const handleUnsubscribe = () => {
+const handleUnsubscribe = async () => {
   if (unsubscribeEmail.value && isValidEmail(unsubscribeEmail.value)) {
-    const index = subscribedEmails.value.indexOf(unsubscribeEmail.value)
-    if (index === -1) {
+    try {
+      // E-posta adresini bul
+      const subscribersRef = collection($db, 'subscribers')
+      const q = query(subscribersRef, where('email', '==', unsubscribeEmail.value))
+      const querySnapshot = await getDocs(q)
+
+      if (querySnapshot.empty) {
+        alert('Bu e-posta adresi kayıtlı değil!')
         unsubscribeEmail.value = ''
-      alert('Bu e-posta adresi kayıtlı değil!')
-      return
+        return
+      }
+
+      // Aboneliği sil
+      const docToDelete = querySnapshot.docs[0]
+      await deleteDoc(docToDelete.ref)
+
+      unsubscribeEmail.value = ''
+      alert('Abonelikten başarıyla çıkarıldınız')
+      showUnsubscribeForm.value = false
+    } catch (error) {
+      console.error('Abonelik iptali hatası:', error)
+      alert('Bir hata oluştu. Lütfen tekrar deneyin.')
     }
-    subscribedEmails.value.splice(index, 1)
-    unsubscribeEmail.value = ''
-    alert('Abonelikten Çıkarıldınız')
-    showUnsubscribeForm.value = false
   }
 }
 
