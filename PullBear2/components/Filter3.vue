@@ -1,0 +1,79 @@
+<template>
+    <div class="filter-buttons">
+      <button 
+        :class="{ active: subTshirt === 'all' }" 
+        @click="applyFilter('all')"
+      >
+        Hepsi
+      </button>
+      <button 
+        :class="{ active: subTshirt === 'tisort' }" 
+        @click="applyFilter('tisort')"
+      >
+        T-Shirt
+      </button>
+      <button 
+        :class="{ active: subTshirt === 'gomlek' }" 
+        @click="applyFilter('gomlek')"
+      >
+        Gömlek
+      </button>
+      <button 
+        :class="{ active: subTshirt === 'grafic' }" 
+        @click="applyFilter('grafic')"
+      >
+        Grafik Baskılı
+      </button>
+      <button 
+        :class="{ active: subTshirt === 'basic' }" 
+        @click="applyFilter('basic')"
+      >
+        Basic
+      </button>
+      
+      
+      
+
+    </div>
+  </template>
+  
+  <script>
+  export default {
+    data() {
+      return {
+        subTshirt: 'all', // Varsayılan olarak "Tümünü Gör"
+      };
+    },
+    methods: {
+      applyFilter(filter3) {
+        this.subTshirt = filter3;
+        this.$emit('filter-changed', filter3); // Parent component'e filtreyi gönderir
+      },
+    },
+  };
+  </script>
+  
+  <style scoped>
+  .filter-buttons {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+  }
+  
+  button {
+    padding: 10px;
+    border: none;
+    cursor: pointer;
+    background-color: #f1f1f1;
+    font-size: 14px;
+    border-radius: 100px;
+  }
+  
+  button.active {
+    background-color: #000;
+    color: white;
+  }
+  
+  
+  </style>
+  
