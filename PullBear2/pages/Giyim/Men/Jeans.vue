@@ -9,7 +9,8 @@
         <h1>Erkek Jean Koleksiyonu</h1>
     </div>
     <div class="products-section">
-        <Products :gender="'men'" :defaultCategory="selectedFilter" />
+        <Filter4 @filter-changed="handleFilterChange" />
+        <Products :defaultGender="'men'" :defaultCategory="'jeans'" :defaultSubJeans="subJeans" />
     </div>
     <Button />
     <Sepet />
@@ -17,7 +18,7 @@
 </template>
 
 <script>
-import Filter from '../../../components/Filter.vue';
+import Filter4 from '../../../components/Filter4.vue';
 import Menu from '../../../components/Menu.vue';
 import Products from '../../../components/Products.vue';
 import Button from '../../../components/Button.vue';
@@ -28,7 +29,7 @@ export default {
     name: 'MenJeansPage',
     components: {
         Menu,
-        Filter,
+        Filter4,
         Products,
         Button,
         Sepet,
@@ -36,12 +37,12 @@ export default {
     },
     data() {
         return {
-            selectedFilter: 'jeans'
+            subJeans: 'all'
         }
     },
     methods: {
-        handleFilterChange(filter) {
-            this.selectedFilter = filter;
+        handleFilterChange(filter4) {
+            this.subJeans = filter4;
         }
     }
 }
