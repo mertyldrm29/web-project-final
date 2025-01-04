@@ -78,10 +78,10 @@
   <style scoped>
   /* Sepet Konteyneri */
   .cart-container {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    flex: 0 0 auto;
+    position: fixed;
+    right: 10px;
+    top: 60px;
+    z-index: 998;
   }
   
   /* Sepet İkonu */
@@ -89,6 +89,8 @@
     background: none;
     border: none;
     cursor: pointer;
+    display: flex;
+    align-items: center;
   }
   
   .button-text .count {
@@ -108,8 +110,8 @@
     box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
-    z-index: 1000;
-    transform: translateX(100%); /* Başlangıçta gizli olacak */
+    z-index: 9998;
+    transform: translateX(100%);
     transition: transform 0.3s ease;
   }
   
@@ -138,7 +140,7 @@
   
   /* Sepet Paneli Açıldığında Görünür Olacak */
   .cart-panel.open {
-    transform: translateX(0); /* Panel sağa kayacak */
+    transform: translateX(0);
   }
   
   /* Sepet Ürün Stili */
