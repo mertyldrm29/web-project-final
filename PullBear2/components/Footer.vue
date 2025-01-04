@@ -30,16 +30,16 @@
     <div class="footer-section">
       <h3>Bizi Takip Et</h3>
       <div class="social-links">
-        <a href="https://www.instagram.com" target="_blank">
+        <a href="https://www.instagram.com/pullandbear/" target="_blank">
           <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/instagram.png" alt="Instagram" />
         </a>
-        <a href="https://www.facebook.com" target="_blank">
+        <a href="https://www.facebook.com/pullandbear" target="_blank">
           <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/facebook.png" alt="Facebook" />
         </a>
-        <a href="https://www.twitter.com" target="_blank">
+        <a href="https://www.twitter.com/pullandbear" target="_blank">
           <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/twitterv2.png" alt="Twitter" />
         </a>
-        <a href="https://www.tiktok.com" target="_blank">
+        <a href="https://www.tiktok.com/pullandbear" target="_blank">
           <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/tiktok.png" alt="TikTok" />
         </a>
       </div>
@@ -78,7 +78,7 @@ export default {
 .app-links a img,
 .payment-methods img,
 .social-links a img {
-  width: 50px; /* Görsellerin boyutu */
+  width: 60px; /* Görsellerin boyutu */
   height: auto;
   margin: 5px;
   transition: transform 0.3s ease;
