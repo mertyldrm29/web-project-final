@@ -9,7 +9,8 @@
         <h1>Kadın Ceket & Mont Koleksiyonu</h1>
     </div>
     <div class="products-section">
-        <Products :gender="'women'" :defaultCategory="'jackets'" />
+      <Filter5 @filter-changed="handleFilterChange"/>
+      <Products :defaultGender="'women'" :defaultCategory="'jackets'" :defaultSubJackets="subJackets" /> />
     </div>
     <Button />
     <Sepet />
@@ -22,7 +23,7 @@ import Products from '../../components/Products.vue';
 import Button from '../../components/Button.vue';
 import Sepet from '../../components/Sepet.vue';
 import Footer from '../../components/Footer.vue';
-
+import Filter5 from '../../components/Filter5.vue';
 export default {
     name: 'WomenJacketsPage',
     components: {
@@ -30,8 +31,20 @@ export default {
         Products,
         Button,
         Sepet,
-        Footer
+        Footer,
+        Filter5
+    },
+    data() {
+    return {
+      subJackets: 'all'
     }
+  },
+  methods: {
+    handleFilterChange(filter5) {
+      this.subJackets = filter5;
+    }
+  }
+
 }
 </script>
 
