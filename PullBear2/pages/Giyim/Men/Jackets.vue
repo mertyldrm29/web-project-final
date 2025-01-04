@@ -9,7 +9,8 @@
         <h1>Erkek Ceket & Mont Koleksiyonu</h1>
     </div>
     <div class="products-section">
-        <Products :gender="'men'" :defaultCategory="selectedFilter" />
+        <Filter5 @filter-changed="handleFilterChange"/>
+        <Products :defaultGender="'men'" :defaultCategory="'jackets'" :defaultSubJackets="subJackets" />
     </div>
     <Button />
     <Sepet />
@@ -17,7 +18,7 @@
 </template>
 
 <script>
-import Filter from '../../../components/Filter.vue';
+import Filter5 from '../../../components/Filter5.vue';
 import Menu from '../../../components/Menu.vue';
 import Products from '../../../components/Products.vue';
 import Button from '../../../components/Button.vue';
@@ -28,22 +29,22 @@ export default {
     name: 'MenJeansPage',
     components: {
         Menu,
-        Filter,
+        Filter5,
         Products,
         Button,
         Sepet,
         Footer
     },
     data() {
-        return {
-            selectedFilter: 'jackets'
-        }
-    },
-    methods: {
-        handleFilterChange(filter) {
-            this.selectedFilter = filter;
-        }
+    return {
+      subJackets: 'all'
     }
+  },
+  methods: {
+    handleFilterChange(filter5) {
+      this.subJackets = filter5;
+    }
+  }
 }
 </script>
 
