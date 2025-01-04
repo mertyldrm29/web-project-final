@@ -30,6 +30,10 @@ export default {
         defaultCategory: {
             type: String,
             required: true
+        },
+        defaultGender: {
+            type: String,
+            required: true
         }
     },
     data() {
@@ -85,8 +89,8 @@ export default {
             let filtered = this.products;
         
         // Eğer gender 'all' değilse, cinsiyete göre filtrele
-        if (this.gender !== 'all') {
-            filtered = filtered.filter(product => product.gender === this.gender);
+        if (this.defaultGender !== 'all') {
+            filtered = filtered.filter(product => product.gender === this.defaultGender);
         }
             
             // Kategori filtreleme
