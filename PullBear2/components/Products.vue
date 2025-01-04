@@ -1,12 +1,9 @@
 <template>
    <div>
-      <!-- Ürünler -->
       <div class="products-container">
-        <!-- Eğer filtrelenmiş ürün yoksa mesaj göster -->
         <div v-if="filteredProducts.length === 0" class="no-products-message">
           Bu kategoride bir ürün bulunamamıştır.
         </div>
-        <!-- Ürünler varsa onları göster -->
         <div v-else v-for="product in filteredProducts" :key="product.id" class="product-card">
           <img 
             :src="hoveredProduct === product.id ? product.hoverImage : product.image" 
@@ -17,7 +14,7 @@
           />
           <div class="product-info">
             <h4 class="product-name">{{ product.name }}</h4>
-            <button class="add-to-cart-btn">Sepete Ekle</button>
+            <button @click="handleAddToCart(product)" class="add-to-cart-btn">Sepete Ekle</button>
             <p class="product-price">{{ product.price }} TL</p>
           </div>
         </div>
@@ -26,8 +23,9 @@
 </template>
 
 <script>
-import { collection, getDocs } from 'firebase/firestore'
+import { ref, onMounted } from 'vue'
 import { useNuxtApp } from 'nuxt/app'
+import { collection, getDocs, addDoc, query, where, updateDoc, doc } from 'firebase/firestore'
 
 export default {
     props: {
@@ -63,67 +61,101 @@ export default {
     data() {
         return {
             hoveredProduct: null,
-            products: [],
-        };
-    },
-    async created() {
-        await this.fetchProducts();
+            products: []
+        }
     },
     methods: {
         async fetchProducts() {
             try {
-                const { $db } = useNuxtApp();
-                const querySnapshot = await getDocs(collection($db, "products"));
+                const { $db } = useNuxtApp()
+                const querySnapshot = await getDocs(collection($db, "products"))
                 this.products = querySnapshot.docs.map(doc => ({
                     ...doc.data(),
                     id: doc.id
-                }));
+                }))
             } catch (error) {
-                console.error("Error fetching products:", error);
+                console.error("Error fetching products:", error)
+            }
+        },
+        async handleAddToCart(product) {
+            try {
+                const { $db } = useNuxtApp()
+                const cartRef = collection($db, 'cart')
+                
+                // Önce ürünün sepette olup olmadığını kontrol et
+                const q = query(cartRef, where('productId', '==', product.id))
+                const querySnapshot = await getDocs(q)
+                
+                if (!querySnapshot.empty) {
+                    // Ürün zaten sepette, miktarını artır
+                    const existingItem = querySnapshot.docs[0]
+                    const currentQuantity = existingItem.data().quantity || 1
+                    await updateDoc(doc($db, 'cart', existingItem.id), {
+                        quantity: currentQuantity + 1,
+                        totalPrice: (currentQuantity + 1) * product.price
+                    })
+                } else {
+                    // Yeni ürün ekle
+                    await addDoc(cartRef, {
+                        productId: product.id,
+                        name: product.name,
+                        price: product.price,
+                        totalPrice: product.price,
+                        image: product.image,
+                        quantity: 1,
+                        addedAt: new Date()
+                    })
+                }
+                alert('Ürün sepete eklendi!')
+            } catch (error) {
+                console.error('Ürün sepete eklenirken hata oluştu:', error)
+                alert('Ürün eklenirken bir hata oluştu.')
             }
         }
     },
+    async created() {
+        await this.fetchProducts()
+    },
     computed: {
         filteredProducts() {
-            // Önce cinsiyete göre filtrele
-            let filtered = this.products;
-        
-        // Eğer gender 'all' değilse, cinsiyete göre filtrele
-        if (this.defaultGender !== 'all') {
-            filtered = filtered.filter(product => product.gender === this.defaultGender);
-        }
+            let filtered = this.products
             
-            // Kategori filtreleme
-            if (this.defaultCategory !== 'all') {
-                filtered = filtered.filter(product => product.category === this.defaultCategory);
+            if (this.defaultGender !== 'all') {
+                filtered = filtered.filter(product => product.gender === this.defaultGender)
             }
-            // SubTshirt filtresini sadece tshirts kategorisi için uygula
-        if (this.defaultSubTshirt !== 'all' && this.defaultCategory === 'tshirts') {
-            filtered = filtered.filter(product => 
-                product.subTshirt && product.subTshirt.includes(this.defaultSubTshirt)
-            );
-        }
-        if (this.defaultSubJeans !== 'all' && this.defaultCategory === 'jeans') {
-            filtered = filtered.filter(product => 
-                product.subJeans && product.subJeans.includes(this.defaultSubJeans)
-            );
-        }
-        if (this.defaultSubJackets !== 'all' && this.defaultCategory === 'jackets') {
-            filtered = filtered.filter(product => 
-                product.subJackets && product.subJackets.includes(this.defaultSubJackets)
-            );
-        }
-        if (this.defaultSubSweatshirts !== 'all' && this.defaultCategory === 'sweatshirts') {
-            filtered = filtered.filter(product => 
-                product.subSweatshirts && product.subSweatshirts.includes(this.defaultSubSweatshirts)
-            );
-        }
-        
-        
-            return filtered;
+            
+            if (this.defaultCategory !== 'all') {
+                filtered = filtered.filter(product => product.category === this.defaultCategory)
+            }
+
+            if (this.defaultSubTshirt !== 'all' && this.defaultCategory === 'tshirts') {
+                filtered = filtered.filter(product => 
+                    product.subTshirt && product.subTshirt.includes(this.defaultSubTshirt)
+                )
+            }
+
+            if (this.defaultSubJeans !== 'all' && this.defaultCategory === 'jeans') {
+                filtered = filtered.filter(product => 
+                    product.subJeans && product.subJeans.includes(this.defaultSubJeans)
+                )
+            }
+
+            if (this.defaultSubJackets !== 'all' && this.defaultCategory === 'jackets') {
+                filtered = filtered.filter(product => 
+                    product.subJackets && product.subJackets.includes(this.defaultSubJackets)
+                )
+            }
+
+            if (this.defaultSubSweatshirts !== 'all' && this.defaultCategory === 'sweatshirts') {
+                filtered = filtered.filter(product => 
+                    product.subSweatshirts && product.subSweatshirts.includes(this.defaultSubSweatshirts)
+                )
+            }
+            
+            return filtered
         }
     }
-};
+}
 </script>
 
 <style scoped>
