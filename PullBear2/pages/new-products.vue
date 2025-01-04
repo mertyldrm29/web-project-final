@@ -10,8 +10,9 @@
      </div>
      <div class="content">
        <div class="products-section">
+         <Filter2 @filter-changed="handleFilterChange2" />
          <Filter @filter-changed="handleFilterChange" />
-         <Products :gender="'all'" :defaultCategory="selectedFilter" />
+         <Products :defaultGender="chosenFilter" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" />
        </div>
      </div>
      <Button />
@@ -26,12 +27,14 @@
  import Button from '../components/Button.vue';
  import Sepet from '../components/Sepet.vue';
  import Footer from '../components/Footer.vue';
+import Filter2 from '~/components/Filter2.vue';
  
  export default {
    name: 'MenPage',
    components: {
      Menu,
      Filter,
+     Filter2,
      Products,
      Button,
      Sepet,
@@ -39,12 +42,16 @@
    },
    data() {
      return {
-       selectedFilter: 'all'
+       selectedFilter: 'all',
+       chosenFilter: 'all'
      }
    },
    methods: {
      handleFilterChange(filter) {
        this.selectedFilter = filter;
+     },
+     handleFilterChange2(filter2) {
+       this.chosenFilter = filter2;
      }
    }
  }

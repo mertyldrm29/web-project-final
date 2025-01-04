@@ -8,13 +8,12 @@
     <div class="women-page">
       <h1>Kadın Koleksiyonu</h1>
     </div>
-    <Products :gender="'women'" />
     <div class="content">
       <div class="filter-section">
         <Filter @filter-changed="handleFilterChange" />
       </div>
       <div class="products-section">
-        <Products :gender="'women'" :defaultCategory="selectedFilter" />
+        <Products :defaultGender="'women'" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" />
       </div>
     </div>
     <Button />
