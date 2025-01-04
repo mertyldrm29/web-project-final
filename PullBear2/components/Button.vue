@@ -144,10 +144,10 @@ export default {
   position: absolute;
   top: 10px;
   right: 10px;
-  display: flex;
+  padding: 5px 20px;
+  display: absolute;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
   background-color: #000000;
   color: white;
   border: none;
@@ -171,6 +171,7 @@ export default {
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 9999;
 }
 
 .modal {
