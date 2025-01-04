@@ -6,15 +6,13 @@
       {{ loggedInUser ? loggedInUser.name : "" }}
     </button>
 
-    <!-- Modal (Seçenekler veya Hoşgeldiniz Ekranı) -->
+    <!-- Modal -->
     <div v-if="showModal" class="modal-overlay">
       <div class="modal">
         <div v-if="!currentPage && loggedInUser">
           <!-- Hoşgeldiniz Ekranı -->
           <h3>Hoşgeldiniz, {{ loggedInUser.name }} {{ loggedInUser.surname }}!</h3>
-
           <div class="button-group">
-            
             <button @click="openOrdersPage" class="orders">
               <span class="material-icons">shop</span>
               Siparişlerim
@@ -29,7 +27,7 @@
             </button>
             <button @click="logout" class="logout-button">
               <span class="material-icons">logout</span>
-              Çıkış Yap</button> 
+              Çıkış Yap</button>
             <button @click="closeModal" class="close-button">
               <span class="material-icons">close</span>
               Kapat</button>
@@ -46,11 +44,11 @@
         </div>
         <div v-else-if="currentPage === 'login'">
           <!-- Login Form -->
-          <LoginForm :users="users" @login="setLoggedInUser" @back="goBack" />
+          <LoginForm @login="setLoggedInUser" @back="goBack" />
         </div>
         <div v-else-if="currentPage === 'register'">
           <!-- Register Form -->
-          <RegisterForm :users="users" @register="addUser" @back="goBack" />
+          <RegisterForm @register="handleRegister" @back="goBack" />
         </div>
 
         <!-- Siparişlerim Ekranı -->
@@ -80,14 +78,15 @@
 <script>
 import LoginForm from "./LoginForm.vue";
 import RegisterForm from "./RegisterForm.vue";
+import { useNuxtApp } from '#app';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default {
   data() {
     return {
       showModal: false,
       currentPage: null,
-      users: [], // Kullanıcıların kaydedileceği liste
-      loggedInUser: null, // Giriş yapmış kullanıcı bilgisi
+      loggedInUser: null,
     };
   },
   methods: {
@@ -113,28 +112,37 @@ export default {
     goBack() {
       this.currentPage = null;
     },
-    addUser(newUser) {
-      const userExists = this.users.some((user) => user.email === newUser.email);
-
-      if (userExists) {
-        alert("Kullanıcı zaten kayıtlı!");
-        return;
+    async setLoggedInUser(user) {
+      try {
+        const { $db } = useNuxtApp();
+        // Kullanıcı bilgilerini tekrar kontrol et
+        const userDoc = await getDoc(doc($db, 'users', user.id));
+        
+        if (userDoc.exists()) {
+          this.loggedInUser = { id: userDoc.id, ...userDoc.data() };
+          alert(`Giriş başarılı! Hoşgeldiniz, ${this.loggedInUser.name} ${this.loggedInUser.surname}`);
+          this.goBack();
+        } else {
+          alert('Kullanıcı bulunamadı!');
+        }
+      } catch (error) {
+        console.error('Kullanıcı bilgileri alınırken hata:', error);
+        alert('Bir hata oluştu!');
       }
-
-      this.users.push(newUser);
-      alert("Kayıt başarılı!");
-      this.setLoggedInUser(newUser); // Yeni kullanıcı giriş yapmış gibi ayarlanır
-      this.goBack();
     },
-    setLoggedInUser(user) {
-      this.loggedInUser = user;
-      alert(`Giriş başarılı! Hoşgeldiniz, ${user.name} ${user.surname}`);
-      this.goBack();
+    handleRegister(userData) {
+      // Kayıt başarılı olduğunda otomatik giriş yap
+      this.setLoggedInUser(userData);
     },
     logout() {
-      this.loggedInUser = null; // Kullanıcıyı çıkış yapmış duruma getir
+      this.loggedInUser = null;
       alert("Çıkış yapıldı!");
+      this.closeModal();
     },
+  },
+  components: {
+    LoginForm,
+    RegisterForm,
   },
 };
 </script>

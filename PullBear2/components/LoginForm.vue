@@ -12,6 +12,9 @@
   </template>
   
   <script>
+  import { collection, query, where, getDocs } from 'firebase/firestore';
+  import { useNuxtApp } from '#app';
+
   export default {
     data() {
       return {
@@ -20,29 +23,39 @@
         errorMessage: "",
       };
     },
-    props: {
-      users: {
-        type: Array,
-        required: true,
-      },
-    },
     methods: {
-      handleLogin() {
+      async handleLogin() {
         if (!this.email || !this.password) {
           this.errorMessage = "Tüm alanları doldurmanız gerekiyor!";
           return;
         }
   
-        const user = this.users.find(
-          (u) => u.email === this.email && u.password === this.password
-        );
+        try {
+          const { $db } = useNuxtApp();
+          const usersRef = collection($db, 'users');
+          const q = query(usersRef, 
+            where('email', '==', this.email),
+            where('password', '==', this.password)
+          );
+          
+          const querySnapshot = await getDocs(q);
+          
+          if (querySnapshot.empty) {
+            this.errorMessage = "E-posta veya şifre hatalı!";
+            return;
+          }
   
-        if (!user) {
-          this.errorMessage = "E-posta veya şifre hatalı!";
-          return;
+          const userDoc = querySnapshot.docs[0];
+          const userData = {
+            id: userDoc.id,
+            ...userDoc.data()
+          };
+  
+          this.$emit("login", userData);
+        } catch (error) {
+          console.error('Giriş hatası:', error);
+          this.errorMessage = "Giriş yapılırken bir hata oluştu!";
         }
-  
-        this.$emit("login", user); // Giriş yapan kullanıcı bilgisi gönderilir
       },
     },
   };
