@@ -82,7 +82,12 @@ export default {
     computed: {
         filteredProducts() {
             // Önce cinsiyete göre filtrele
-            let filtered = this.products.filter(product => product.gender === this.gender);
+            let filtered = this.products;
+        
+        // Eğer gender 'all' değilse, cinsiyete göre filtrele
+        if (this.gender !== 'all') {
+            filtered = filtered.filter(product => product.gender === this.gender);
+        }
             
             // Kategori filtreleme
             if (this.defaultCategory !== 'all') {
