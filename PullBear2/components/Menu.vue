@@ -6,7 +6,7 @@
       id="buttonMenu"
       class="c-button c-button--menu"
       aria-label="Menüyü görüntüle"
-      @click="toggleSidebar"
+      @mouseover="toggleSidebar"
     >
       <span class="button-text">
         <span class="icon icon-nav-menu">
@@ -35,13 +35,15 @@
       <div class="gender-selection">
         <button
           :class="['gender-button', { selected: selectedCategory === 'men' }]"
-          @click="selectCategory('men')"
+          @mouseover="selectCategory('men')"
+          @click="navigateToPage('men')"
         >
           Erkek
         </button>
         <button
           :class="['gender-button', { selected: selectedCategory === 'women' }]"
-          @click="selectCategory('women')"
+          @mouseover="selectCategory('women')"
+          @click="navigateToPage('women')"
         >
           Kadın
         </button>
@@ -76,9 +78,9 @@ export default {
   data() {
     return {
       isSidebarVisible: false, // Menü paneli başlangıçta gizli
-      selectedCategory: null,  // Başlangıçta kategori seçili değil
-      menItems: ['T-Shirt', 'Pantolon', 'Ceket', 'Şort', 'Ayakkabı'], // Erkek kıyafetleri
-      womenItems: ['Elbise', 'Etek', 'Bluz', 'Pantolon', 'Çanta'], // Kadın kıyafetleri
+      selectedCategory: 'men',  
+      menItems: ['T-Shirt ve Gömlek', 'Jean ve Pantolon', 'Ceket ve Mont', 'Sweatshirt ve Kazak'], // Erkek kıyafetleri
+      womenItems: ['T-Shirt ve Gömlek', 'Jean ve Pantolon', 'Ceket ve Mont', 'Sweatshirt ve Kazak'], // Kadın kıyafetleri
     };
   },
   methods: {
@@ -89,13 +91,60 @@ export default {
       this.selectedCategory = category; // Seçilen kategoriyi belirleme
     },
     selectItem(item) {
-      alert(`${item} seçildi!`); // Seçilen kıyafetle ilgili işlem yapma
+      // Menüyü kapat
+      this.toggleSidebar();
+
+      // Seçilen öğeye göre yönlendirme yap
+      let route = '';
+      if (this.selectedCategory === 'men') {
+        switch(item) {
+          case 'T-Shirt ve Gömlek':
+            route = '/Giyim/Men/Tshirts';
+            break;
+          case 'Jean ve Pantolon':
+            route = '/Giyim/Men/Jeans';
+            break;
+          case 'Ceket ve Mont':
+            route = '/Giyim/Men/Jackets';
+            break;
+          case 'Sweatshirt ve Kazak':
+            route = '/Giyim/Men/Sweatshirts';
+            break;
+        }
+      } else if (this.selectedCategory === 'women') {
+        switch(item) {
+          case 'T-Shirt ve Gömlek':
+            route = '/Giyim/Women/Tshirts';
+            break;
+          case 'Jean ve Pantolon':
+            route = '/Giyim/Women/Jeans';
+            break;
+          case 'Ceket ve Mont':
+            route = '/Giyim/Women/Jackets';
+            break;
+          case 'Sweatshirt ve Kazak':
+            route = '/Giyim/Women/Sweatshirts';
+            break;
+        }
+      }
+      
+      // Yönlendirme yap
+      if (route) {
+        this.$router.push(route);
+      }
+    },
+    navigateToPage(category) {
+      const route = category === 'men' ? '/Men' : '/Women';
+      
+      this.toggleSidebar(); // Menüyü kapat
+      this.$router.push(route);
     }
   }
 };
 </script>
 
 <style scoped>
+
 /* Menü Konteyneri */
 .menu-container {
   display: flex;
