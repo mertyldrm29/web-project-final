@@ -13,7 +13,7 @@
         <Filter @filter-changed="handleFilterChange" />
       </div>
       <div class="products-section">
-        <Products :defaultGender="'women'" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" />
+        <Products :defaultGender="'women'" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" :defaultSubSweatshirts="'all'" />
       </div>
     </div>
     <Button />

@@ -12,7 +12,7 @@
        <div class="products-section">
          <Filter2 @filter-changed="handleFilterChange2" />
          <Filter @filter-changed="handleFilterChange" />
-         <Products :defaultGender="chosenFilter" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" />
+         <Products :defaultGender="chosenFilter" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" :defaultSubSweatshirts="'all'" />
        </div>
      </div>
      <Button />

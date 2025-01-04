@@ -11,7 +11,7 @@
     <div class="content">
       <div class="products-section">
         <Filter @filter-changed="handleFilterChange" />
-        <Products :defaultGender="'men'" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" />
+        <Products :defaultGender="'men'" :defaultCategory="selectedFilter" :defaultSubTshirt="'all'" :defaultSubJeans="'all'" :defaultSubJackets="'all'" :defaultSubSweatshirts="'all'" />
       </div>
     </div>
     <Button />
