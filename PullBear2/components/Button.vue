@@ -419,21 +419,45 @@ export default {
             id: doc.id,
             ...data,
             returnDate: data.returnDate.toDate(),
-            // orderDate alanı yoksa returnDate'i kullan
             orderDate: data.orderDate ? data.orderDate.toDate() : data.returnDate.toDate()
           });
         });
 
-        // Her sipariş için en son iadeyi al (tam iade varsa onu göster)
-        this.userReturns = Object.values(returnsByOrder).map(returns => {
-          // Tam iade varsa onu göster
-          const fullReturn = returns.find(r => r.isFullReturn);
-          if (fullReturn) {
-            return fullReturn;
-          }
-          // Yoksa en son iadeyi göster
-          returns.sort((a, b) => b.returnDate - a.returnDate);
-          return returns[0];
+        // Her sipariş için tüm iade edilen ürünleri birleştir
+        this.userReturns = Object.entries(returnsByOrder).map(([orderId, returns]) => {
+          // Tüm iadelerdeki ürünleri birleştir
+          const allItems = returns.reduce((acc, return_) => {
+            return_.items.forEach(item => {
+              // Aynı ürün daha önce eklenmemişse ekle
+              const existingItem = acc.find(i => 
+                i.productId === item.productId && 
+                i.size === item.size
+              );
+              if (!existingItem) {
+                acc.push(item);
+              }
+            });
+            return acc;
+          }, []);
+
+          // En son iade tarihini al
+          const latestReturn = returns.reduce((latest, current) => 
+            latest.returnDate > current.returnDate ? latest : current
+          );
+
+          // Toplam iade tutarını hesapla (her ürün için sadece bir kez)
+          const totalAmount = allItems.reduce((total, item) => total + item.totalPrice, 0);
+
+          return {
+            id: latestReturn.id,
+            orderId: orderId,
+            userId: latestReturn.userId,
+            items: allItems,
+            totalAmount: totalAmount,
+            returnDate: latestReturn.returnDate,
+            orderDate: latestReturn.orderDate,
+            isFullReturn: this.isOrderFullyReturned(orderId)
+          };
         });
 
         // İadeleri tarihe göre sırala (en yeniden en eskiye)
@@ -454,17 +478,20 @@ export default {
       const returns = this.userReturns.filter(return_ => return_.orderId === orderId);
       if (returns.length === 0) return false;
 
-      // Tüm iade edilen ürünlerin ID'lerini topla
-      const returnedProductIds = returns.flatMap(return_ => 
-        return_.items.map(item => item.productId)
-      );
-
       // İlgili siparişi bul
       const order = this.userOrders.find(order => order.id === orderId);
       if (!order) return false;
 
-      // Siparişteki tüm ürünlerin iade edilip edilmediğini kontrol et
-      return order.items.every(item => returnedProductIds.includes(item.productId));
+      // Siparişteki her ürünün iade edilip edilmediğini kontrol et
+      return order.items.every(orderItem => {
+        // Her bir ürün için iade kaydı var mı kontrol et
+        return returns.some(return_ => 
+          return_.items.some(returnItem => 
+            returnItem.productId === orderItem.productId && 
+            returnItem.size === orderItem.size
+          )
+        );
+      });
     },
   },
   mounted() {

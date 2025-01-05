@@ -1,7 +1,8 @@
 <template>
     <div class="image-container">
       <!-- Arka planda gösterilecek resim -->
-      <img src="https://static.pullandbear.net/assets/public/f95b/1480/812840559ee7/9556c5a6549f/NEW-H/NEW-H.jpg?ts=1732722054160&w=2543&f=auto" alt="Arka Plan Resmi" class="background-image" />
+      <img :src="imageUrl" alt="Arka Plan Resmi" class="background-image" v-if="imageUrl" />
+      <div v-else class="loading">Yükleniyor...</div>
   
       <!-- Buton -->
       <button class="overlay-button" @click="navigateToNewProducts">Yeni Ürünler</button>
@@ -9,14 +10,40 @@
   </template>
   
   <script setup>
-  import { useRouter } from 'vue-router' // Nuxt Router için
+  import { ref, onMounted } from 'vue'
+  import { useRouter } from 'vue-router'
+  import { useNuxtApp } from '#app'
+  import { collection, getDocs, query, limit } from 'firebase/firestore'
   
   const router = useRouter()
+  const imageUrl = ref('')
+  
+  // Firestore'dan resim URL'sini al
+  const fetchImageUrl = async () => {
+    try {
+      const { $db } = useNuxtApp()
+      const bannerRef = collection($db, 'banners')
+      const q = query(bannerRef, limit(1)) // İlk banner'ı al
+      const querySnapshot = await getDocs(q)
+      
+      if (!querySnapshot.empty) {
+        const bannerData = querySnapshot.docs[0].data()
+        imageUrl.value = bannerData.imageUrl
+      }
+    } catch (error) {
+      console.error('Banner resmi yüklenirken hata:', error)
+    }
+  }
   
   // Yeni ürünler sayfasına yönlendirme
   const navigateToNewProducts = () => {
-    router.push('/new-products') // 'new-products' rotasını hedefliyor
+    router.push('/new-products')
   }
+  
+  // Component yüklendiğinde resmi getir
+  onMounted(() => {
+    fetchImageUrl()
+  })
   </script>
   
   <style scoped>
@@ -24,8 +51,7 @@
   .image-container {
     position: relative;
     width: 100%;
-     /* Görselin genişliğini sınırlayabilirsiniz */
-    margin: 0 auto; /* Ortalamak için */
+    margin: 0 auto;
     overflow: hidden;
   }
   
@@ -39,10 +65,10 @@
   /* Butonun konumu */
   .overlay-button {
     position: absolute;
-    top: 50%; /* Ortada */
-    left: 50%; /* Ortada */
-    transform: translate(-50%, -50%); /* Tam merkezleme */
-    background-color: rgba(0, 0, 0, 0.6); /* Şeffaf siyah arka plan */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.6);
     color: white;
     padding: 10px 20px;
     border: none;
@@ -55,6 +81,17 @@
   /* Hover durumunda buton */
   .overlay-button:hover {
     background-color: rgba(0, 0, 0, 0.8);
+  }
+
+  /* Yükleme durumu için stil */
+  .loading {
+    width: 100%;
+    height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+    color: #666;
   }
   </style>
   

@@ -1,56 +1,76 @@
 <template>
-  <footer class="footer">
-    <!-- Uygulama Bilgisi -->
-    <div class="footer-section">
-      <h3>Uygulamamız</h3>      
-      <div class="app-links">
-        <a href="https://www.apple.com/app-store/" target="_blank">
-          <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/downloadApp/ios.png" alt="Google Play" />
-        </a>
-        <a href="https://play.google.com" target="_blank">
-          <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/downloadApp/android.png" alt="App Store" />
+  <footer class="footer" v-if="footerData">
+    <div v-for="section in footerData.sections" :key="section.title" class="footer-section">
+      <h3>{{ section.title }}</h3>
+
+      <!-- Uygulama Linkleri -->
+      <div v-if="section.type === 'app'" class="app-links">
+        <a v-for="link in section.links" 
+           :key="link.url" 
+           :href="link.url" 
+           target="_blank">
+          <img :src="link.imageUrl" :alt="link.alt" />
         </a>
       </div>
-    </div>
 
-    <!-- Ödeme Yöntemleri -->
-    <div class="footer-section">
-      <h3>Ödeme Yöntemleri</h3>
-      <div class="payment-methods">
-        <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/payment/VISAInstallments.svg?20241128110207224196863" alt="Visa" />
-        <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/payment/MasterCardInstallments.svg?20241128110207224196863" alt="Mastercard" />
-        <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/payment/AMEXInstallments.svg?20241128110207224196863" alt="PayPal" />
-        <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/payment/GiftCard.svg?20241128110207224196863" alt="American Express" />
-        <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/payment/Discount.svg?20241128110207224196863" alt="Discover" />
-        <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/payment/Troy.svg?20241128110207224196863" alt="Bitcoin" />
+      <!-- Ödeme Yöntemleri -->
+      <div v-if="section.type === 'payment'" class="payment-methods">
+        <img v-for="method in section.methods" 
+             :key="method.alt"
+             :src="method.imageUrl" 
+             :alt="method.alt" />
       </div>
-    </div>
 
-    <!-- Sosyal Medya -->
-    <div class="footer-section">
-      <h3>Bizi Takip Et</h3>
-      <div class="social-links">
-        <a href="https://www.instagram.com/pullandbear/" target="_blank">
-          <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/instagram.png" alt="Instagram" />
-        </a>
-        <a href="https://www.facebook.com/pullandbear" target="_blank">
-          <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/facebook.png" alt="Facebook" />
-        </a>
-        <a href="https://www.twitter.com/pullandbear" target="_blank">
-          <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/twitterv2.png" alt="Twitter" />
-        </a>
-        <a href="https://www.tiktok.com/pullandbear" target="_blank">
-          <img src="https://static.pullandbear.net/2/static2/itxwebstandard/images/footer/social/21/tiktok.png" alt="TikTok" />
+      <!-- Sosyal Medya -->
+      <div v-if="section.type === 'social'" class="social-links">
+        <a v-for="link in section.links" 
+           :key="link.url" 
+           :href="link.url" 
+           target="_blank">
+          <img :src="link.imageUrl" :alt="link.alt" />
         </a>
       </div>
     </div>
   </footer>
 </template>
 
-<script>
-export default {
-  name: "Footer",
-};
+<script setup>
+import { ref, onMounted } from 'vue'
+import { useNuxtApp } from '#app'
+import { collection, query, getDocs, where, limit } from 'firebase/firestore'
+
+const footerData = ref(null)
+
+const fetchFooterData = async () => {
+  try {
+    console.log('Footer verileri yükleniyor...')
+    const { $db } = useNuxtApp()
+    if (!$db) {
+      console.error('Firestore bağlantısı bulunamadı ($db undefined)')
+      return
+    }
+
+    const footerRef = collection($db, 'footer')
+    const q = query(
+      footerRef,
+      where('isActive', '==', true),
+      limit(1)
+    )
+
+    const querySnapshot = await getDocs(q)
+    if (!querySnapshot.empty) {
+      const doc = querySnapshot.docs[0]
+      footerData.value = doc.data()
+      console.log('Footer verileri yüklendi:', footerData.value)
+    }
+  } catch (error) {
+    console.error('Footer verileri yüklenirken hata:', error)
+  }
+}
+
+onMounted(() => {
+  fetchFooterData()
+})
 </script>
 
 <style scoped>
@@ -65,7 +85,7 @@ export default {
 }
 
 .footer-section {
-  flex: 1 1 30%; /* Her bölüm eşit alan kaplasın */
+  flex: 1 1 30%;
   text-align: center;
 }
 
@@ -78,7 +98,7 @@ export default {
 .app-links a img,
 .payment-methods img,
 .social-links a img {
-  width: 60px; /* Görsellerin boyutu */
+  width: 60px;
   height: auto;
   margin: 5px;
   transition: transform 0.3s ease;
@@ -87,7 +107,7 @@ export default {
 .app-links a img:hover,
 .payment-methods img:hover,
 .social-links a img:hover {
-  transform: scale(1.1); /* Hover efekti */
+  transform: scale(1.1);
 }
 
 .payment-methods {

@@ -160,10 +160,14 @@ export default {
             try {
                 const { $db } = useNuxtApp();
                 const querySnapshot = await getDocs(collection($db, "products"));
-                this.products = querySnapshot.docs.map(doc => ({
-                    ...doc.data(),
-                    id: doc.id
-                }));
+                this.products = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return {
+                        ...data,
+                        firestoreId: doc.id, // Firestore belge ID'sini sakla
+                        id: data.id // Numaralandırılmış ID'yi kullan
+                    };
+                });
             } catch (error) {
                 console.error("Error fetching products:", error);
             }
@@ -192,8 +196,8 @@ export default {
                 
                 // Önce ürünün kullanıcının sepetinde olup olmadığını kontrol et
                 const q = query(cartRef, 
-                    where('productId', '==', product.id),
-                    where('userId', '==', userId),
+                    where('productId', '==', String(product.id)),
+                    where('userId', '==', String(userId)),
                     where('size', '==', selectedSize)
                 );
                 const querySnapshot = await getDocs(q);
@@ -209,15 +213,15 @@ export default {
                         return;
                     }
                     
-                    await updateDoc(doc($db, 'cart', existingItem.id), {
+                    await updateDoc(doc($db, 'cart', String(existingItem.id)), {
                         quantity: currentQuantity + 1,
                         totalPrice: (currentQuantity + 1) * product.price
                     });
                 } else {
                     // Yeni ürün ekle
                     await addDoc(cartRef, {
-                        userId: userId,
-                        productId: product.id,
+                        userId: String(userId),
+                        productId: String(product.id),
                         name: product.name,
                         price: product.price,
                         totalPrice: product.price,
@@ -228,7 +232,7 @@ export default {
                 }
                 
                 // Stok durumunu güncelle
-                const productRef = doc($db, 'products', product.id);
+                const productRef = doc($db, 'products', product.firestoreId); // Firestore ID'sini kullan
                 await updateDoc(productRef, {
                     [`sizes.${selectedSize}`]: 0 // Ürün sepete eklendiğinde stok tükenir
                 });

@@ -138,7 +138,7 @@ export default {
         const userId = this.loggedInUser ? this.loggedInUser.id : '1';
         
         // Eski kullanıcının (userId = '1') sepetindeki ürünleri al
-        const oldCartQuery = query(cartRef, where('userId', '==', '1'));
+        const oldCartQuery = query(cartRef, where('userId', '==', String('1')));
         const oldCartSnapshot = await getDocs(oldCartQuery);
         
         // Eğer eski sepette ürün varsa ve kullanıcı giriş yapmışsa
@@ -151,7 +151,7 @@ export default {
             // Sonra yeni kullanıcı ID'si ile ekle
             await addDoc(cartRef, {
               ...itemData,
-              userId: this.loggedInUser.id
+              userId: String(this.loggedInUser.id)
             });
           });
           
@@ -172,7 +172,7 @@ export default {
         }
 
         // Kullanıcıya özel sorgu oluştur
-        const userId = this.loggedInUser ? this.loggedInUser.id : '1';
+        const userId = this.loggedInUser ? String(this.loggedInUser.id) : '1';
         const q = query(cartRef, where('userId', '==', userId));
 
         // Yeni listener ekle
@@ -196,7 +196,7 @@ export default {
         const { $db } = useNuxtApp();
         
         // Önce ürünün stok durumunu kontrol et
-        const productRef = doc($db, 'products', item.productId);
+        const productRef = doc($db, 'products', String(item.productId));
         const productDoc = await getDoc(productRef);
         
         if (!productDoc.exists()) {
@@ -214,7 +214,7 @@ export default {
         const newTotalPrice = item.price * newQuantity;
         
         // Sepetteki ürün miktarını güncelle
-        await updateDoc(doc($db, 'cart', item.id), {
+        await updateDoc(doc($db, 'cart', String(item.id)), {
           quantity: newQuantity,
           totalPrice: newTotalPrice
         });
@@ -236,14 +236,14 @@ export default {
         const newTotalPrice = item.price * newQuantity;
         
         // Sepetteki ürün miktarını güncelle
-        await updateDoc(doc($db, 'cart', item.id), {
+        await updateDoc(doc($db, 'cart', String(item.id)), {
           quantity: newQuantity,
           totalPrice: newTotalPrice
         });
         
         // Eğer ürün sepetten tamamen çıkarılıyorsa stok durumunu güncelle
         if (newQuantity === 0) {
-          const productRef = doc($db, 'products', item.productId);
+          const productRef = doc($db, 'products', String(item.productId));
           const productDoc = await getDoc(productRef);
           
           if (productDoc.exists()) {
@@ -261,7 +261,7 @@ export default {
         const { $db } = useNuxtApp();
         
         // Ürün stoğunu tekrar mevcut yap
-        const productRef = doc($db, 'products', item.productId);
+        const productRef = doc($db, 'products', String(item.productId));
         const productDoc = await getDoc(productRef);
         
         if (productDoc.exists()) {
@@ -271,7 +271,7 @@ export default {
         }
         
         // Sepetten ürünü kaldır
-        await deleteDoc(doc($db, 'cart', item.id));
+        await deleteDoc(doc($db, 'cart', String(item.id)));
       } catch (error) {
         console.error('Ürün sepetten kaldırılırken hata:', error);
       }
@@ -280,7 +280,7 @@ export default {
       try {
         const { $db } = useNuxtApp();
         const promises = this.cartItems.map(item => 
-          deleteDoc(doc($db, 'cart', item.id))
+          deleteDoc(doc($db, 'cart', String(item.id)))
         );
         await Promise.all(promises);
       } catch (error) {
@@ -307,9 +307,9 @@ export default {
         
         // Siparişi oluştur
         const order = {
-          userId: this.loggedInUser.id,
+          userId: String(this.loggedInUser.id),
           items: this.cartItems.map(item => ({
-            productId: item.productId,
+            productId: String(item.productId),
             name: item.name,
             price: item.price,
             quantity: item.quantity,
