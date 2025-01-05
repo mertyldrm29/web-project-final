@@ -48,6 +48,7 @@
             <div class="cart-item-details">
               <h3>{{ item.name }}</h3>
               <p>Fiyat: {{ item.price }} TL</p>
+              <p>Beden: {{ item.size }}</p>
               <div class="quantity-controls">
                 <button @click="decreaseQuantity(item)" class="quantity-btn">-</button>
                 <span>{{ item.quantity }}</span>
@@ -71,7 +72,7 @@
 </template>
 
 <script>
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { useNuxtApp } from '#app';
 
 export default {
@@ -80,8 +81,22 @@ export default {
       cartItems: [],
       isCartOpen: false,
       unsubscribe: null,
-      loggedInUser: null
+      loggedInUser: null,
+      authCheckInterval: null
     };
+  },
+  watch: {
+    // localStorage'daki kullanıcı değişikliklerini izle
+    '$data.loggedInUser': {
+      handler(newUser) {
+        this.setupCartListener(); // Kullanıcı değiştiğinde sepeti güncelle
+        if (!newUser) {
+          // Kullanıcı çıkış yaptığında sepet panelini kapat
+          this.isCartOpen = false;
+        }
+      },
+      deep: true
+    }
   },
   computed: {
     calculateTotal() {
@@ -95,40 +110,119 @@ export default {
     }
   },
   methods: {
+    checkAuthStatus() {
+      const savedUser = localStorage.getItem('loggedInUser');
+      if (!savedUser && this.loggedInUser) {
+        // Kullanıcı çıkış yapmış
+        this.handleUserLogout();
+      } else if (savedUser && !this.loggedInUser) {
+        // Kullanıcı giriş yapmış
+        this.handleUserLogin(JSON.parse(savedUser));
+      }
+    },
+    async handleUserLogin(user) {
+      this.loggedInUser = user;
+      await this.setupCartListener();
+      // Kullanıcı giriş yaptığında mevcut sepeti kontrol et
+      await this.checkAndUpdateCart();
+    },
+    async handleUserLogout() {
+      this.loggedInUser = null;
+      await this.setupCartListener();
+      this.isCartOpen = false;
+    },
+    async checkAndUpdateCart() {
+      try {
+        const { $db } = useNuxtApp();
+        const cartRef = collection($db, 'cart');
+        const userId = this.loggedInUser ? this.loggedInUser.id : '1';
+        
+        // Eski kullanıcının (userId = '1') sepetindeki ürünleri al
+        const oldCartQuery = query(cartRef, where('userId', '==', '1'));
+        const oldCartSnapshot = await getDocs(oldCartQuery);
+        
+        // Eğer eski sepette ürün varsa ve kullanıcı giriş yapmışsa
+        if (!oldCartSnapshot.empty && this.loggedInUser) {
+          // Eski sepetteki ürünleri yeni kullanıcıya taşı
+          const updatePromises = oldCartSnapshot.docs.map(async (doc) => {
+            const itemData = doc.data();
+            // Önce eski ürünü sil
+            await deleteDoc(doc.ref);
+            // Sonra yeni kullanıcı ID'si ile ekle
+            await addDoc(cartRef, {
+              ...itemData,
+              userId: this.loggedInUser.id
+            });
+          });
+          
+          await Promise.all(updatePromises);
+        }
+      } catch (error) {
+        console.error('Sepet güncelleme hatası:', error);
+      }
+    },
+    async setupCartListener() {
+      try {
+        const { $db } = useNuxtApp();
+        const cartRef = collection($db, 'cart');
+        
+        // Önceki listener'ı temizle
+        if (this.unsubscribe) {
+          this.unsubscribe();
+        }
+
+        // Kullanıcıya özel sorgu oluştur
+        const userId = this.loggedInUser ? this.loggedInUser.id : '1';
+        const q = query(cartRef, where('userId', '==', userId));
+
+        // Yeni listener ekle
+        this.unsubscribe = onSnapshot(q, (snapshot) => {
+          this.cartItems = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+        }, (error) => {
+          console.error('Sepet dinlenirken hata:', error);
+        });
+      } catch (error) {
+        console.error('Sepet listener kurulum hatası:', error);
+      }
+    },
     toggleCart() {
       this.isCartOpen = !this.isCartOpen;
-    },
-    setupCartListener() {
-      const { $db } = useNuxtApp();
-      const cartRef = collection($db, 'cart');
-      
-      // Önceki listener'ı temizle
-      if (this.unsubscribe) {
-        this.unsubscribe();
-      }
-
-      // Yeni listener ekle
-      this.unsubscribe = onSnapshot(cartRef, (snapshot) => {
-        this.cartItems = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-      }, (error) => {
-        console.error('Sepet dinlenirken hata:', error);
-      });
     },
     async increaseQuantity(item) {
       try {
         const { $db } = useNuxtApp();
+        
+        // Önce ürünün stok durumunu kontrol et
+        const productRef = doc($db, 'products', item.productId);
+        const productDoc = await getDoc(productRef);
+        
+        if (!productDoc.exists()) {
+          console.error('Ürün bulunamadı');
+          return;
+        }
+        
+        const product = productDoc.data();
+        if (product.sizes[item.size] === 0) {
+          alert('Bu bedende ürün tükendi!');
+          return;
+        }
+        
         const newQuantity = item.quantity + 1;
         const newTotalPrice = item.price * newQuantity;
         
+        // Sepetteki ürün miktarını güncelle
         await updateDoc(doc($db, 'cart', item.id), {
           quantity: newQuantity,
           totalPrice: newTotalPrice
         });
         
-        await this.loadCart();
+        // Stok durumunu güncelle
+        await updateDoc(productRef, {
+          [`sizes.${item.size}`]: 0 // Ürün sepete eklendiğinde stok tükenir
+        });
       } catch (error) {
         console.error('Miktar artırılırken hata:', error);
       }
@@ -141,12 +235,23 @@ export default {
         const newQuantity = item.quantity - 1;
         const newTotalPrice = item.price * newQuantity;
         
+        // Sepetteki ürün miktarını güncelle
         await updateDoc(doc($db, 'cart', item.id), {
           quantity: newQuantity,
           totalPrice: newTotalPrice
         });
         
-        await this.loadCart();
+        // Eğer ürün sepetten tamamen çıkarılıyorsa stok durumunu güncelle
+        if (newQuantity === 0) {
+          const productRef = doc($db, 'products', item.productId);
+          const productDoc = await getDoc(productRef);
+          
+          if (productDoc.exists()) {
+            await updateDoc(productRef, {
+              [`sizes.${item.size}`]: 1 // Ürün sepetten çıkarıldığında stok mevcut olur
+            });
+          }
+        }
       } catch (error) {
         console.error('Miktar azaltılırken hata:', error);
       }
@@ -154,8 +259,19 @@ export default {
     async removeFromCart(item) {
       try {
         const { $db } = useNuxtApp();
+        
+        // Ürün stoğunu tekrar mevcut yap
+        const productRef = doc($db, 'products', item.productId);
+        const productDoc = await getDoc(productRef);
+        
+        if (productDoc.exists()) {
+          await updateDoc(productRef, {
+            [`sizes.${item.size}`]: 1 // Ürün sepetten çıkarıldığında stok mevcut olur
+          });
+        }
+        
+        // Sepetten ürünü kaldır
         await deleteDoc(doc($db, 'cart', item.id));
-        await this.loadCart();
       } catch (error) {
         console.error('Ürün sepetten kaldırılırken hata:', error);
       }
@@ -167,14 +283,17 @@ export default {
           deleteDoc(doc($db, 'cart', item.id))
         );
         await Promise.all(promises);
-        await this.loadCart();
       } catch (error) {
         console.error('Sepet temizlenirken hata:', error);
       }
     },
     async placeOrder() {
+      // Sipariş vermeden önce kullanıcı durumunu tekrar kontrol et
+      this.checkAuthStatus();
+
       if (!this.loggedInUser) {
         alert('Sipariş vermek için lütfen giriş yapınız.');
+        this.isCartOpen = false; // Sepet panelini kapat
         return;
       }
 
@@ -195,6 +314,7 @@ export default {
             price: item.price,
             quantity: item.quantity,
             image: item.image,
+            size: item.size,
             totalPrice: item.totalPrice
           })),
           totalAmount: this.calculateTotal,
@@ -211,32 +331,38 @@ export default {
         // Sepet panelini kapat
         this.isCartOpen = false;
 
-        alert('Siparişiniz Alındı.');
+        alert('Siparişiniz başarıyla oluşturuldu!');
       } catch (error) {
         console.error('Sipariş oluşturulurken hata:', error);
-        alert('Sipariş oluşturulurken bir hata oluştu.');
+        alert('Sipariş oluşturulurken bir hata oluştu!');
       }
-    },
-    checkLoggedInUser() {
-      const savedUser = localStorage.getItem('loggedInUser');
-      if (savedUser) {
-        this.loggedInUser = JSON.parse(savedUser);
-      }
-    },
-    handleUserLogin(user) {
-      this.loggedInUser = user;
-    },
-    handleUserLogout() {
-      this.loggedInUser = null;
     }
   },
-  mounted() {
-    this.setupCartListener();
-    this.checkLoggedInUser();
+  async mounted() {
+    try {
+      // LocalStorage'dan kullanıcı bilgisini al
+      const savedUser = localStorage.getItem('loggedInUser');
+      if (savedUser) {
+        await this.handleUserLogin(JSON.parse(savedUser));
+      } else {
+        await this.setupCartListener();
+      }
+
+      // Her 1 saniyede bir kullanıcı durumunu kontrol et
+      this.authCheckInterval = setInterval(() => {
+        this.checkAuthStatus();
+      }, 1000);
+    } catch (error) {
+      console.error('Component mount hatası:', error);
+    }
   },
   beforeUnmount() {
     if (this.unsubscribe) {
       this.unsubscribe();
+    }
+    // Interval'i temizle
+    if (this.authCheckInterval) {
+      clearInterval(this.authCheckInterval);
     }
   }
 };

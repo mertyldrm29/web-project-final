@@ -81,18 +81,16 @@
                   <div class="product-details">
                     <div class="product-header">
                       <h4>{{ item.name }}</h4>
-                      <div 
-                        v-if="isProductReturned(order.id, item.productId)" 
-                        class="return-status"
-                      >
+                      <div v-if="item.isReturned" class="return-status">
                         İade Edildi
                       </div>
                     </div>
+                    <p>Beden: {{ item.size }}</p>
                     <p>Adet: {{ item.quantity }}</p>
                     <p>Birim Fiyat: {{ item.price }} TL</p>
                     <p>Toplam: {{ item.totalPrice }} TL</p>
                     <button 
-                      v-if="canReturn(order.orderDate) && !isProductReturned(order.id, item.productId)" 
+                      v-if="canReturn(order.orderDate) && !item.isReturned" 
                       @click="returnItem(order, item)" 
                       class="return-item-btn"
                     >
@@ -123,6 +121,7 @@
                   <img :src="item.image" :alt="item.name" class="product-image">
                   <div class="product-details">
                     <h4>{{ item.name }}</h4>
+                    <p>Beden: {{ item.size }}</p>
                     <p>Adet: {{ item.quantity }}</p>
                     <p>Birim Fiyat: {{ item.price }} TL</p>
                     <p>Toplam: {{ item.totalPrice }} TL</p>
@@ -268,12 +267,43 @@ export default {
       const diffInMinutes = (now - orderTime) / (1000 * 60);
       return diffInMinutes <= 1;
     },
-    async returnItem(order, item) {
-      if (!this.canReturn(order.orderDate)) {
-        alert('Sipariş Verildikten 1 Dakika Sonra İade Edilemez');
-        return;
-      }
+    async placeOrder() {
+      try {
+        const { $db } = useNuxtApp();
+        
+        // Siparişi oluştur
+        const order = {
+          userId: this.loggedInUser.id,
+          items: this.cartItems.map(item => ({
+            productId: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            size: item.size, // Beden bilgisini ekle
+            totalPrice: item.totalPrice
+          })),
+          totalAmount: this.calculateTotal,
+          orderDate: new Date(),
+          status: 'completed'
+        };
 
+        // Siparişi Firestore'a kaydet
+        await addDoc(collection($db, 'orders'), order);
+
+        // Sepeti temizle
+        await this.clearCart();
+
+        // Sepet panelini kapat
+        this.isCartOpen = false;
+
+        alert('Siparişiniz başarıyla oluşturuldu!');
+      } catch (error) {
+        console.error('Sipariş oluşturulurken hata:', error);
+        alert('Sipariş oluşturulurken bir hata oluştu!');
+      }
+    },
+    async returnItem(order, item) {
       try {
         const { $db } = useNuxtApp();
         
@@ -287,31 +317,28 @@ export default {
             price: item.price,
             quantity: item.quantity,
             image: item.image,
+            size: item.size, // Beden bilgisini ekle
             totalPrice: item.totalPrice
           }],
           totalAmount: item.totalPrice,
-          returnDate: new Date(),
-          orderDate: order.orderDate,
-          status: 'completed'
+          returnDate: new Date()
         };
 
-        // Önce iade kaydını oluştur
+        // İade kaydını oluştur
         await addDoc(collection($db, 'returns'), returnData);
 
-        // Siparişten ürünü kaldır
-        const updatedItems = order.items.filter(i => i.productId !== item.productId);
-        const updatedTotalAmount = order.totalAmount - item.totalPrice;
+        // Siparişi güncelle - iade edilen ürünün durumunu güncelle
+        const updatedItems = order.items.map(i => {
+          if (i.productId === item.productId && i.size === item.size) { // Beden kontrolü ekle
+            return { ...i, isReturned: true };
+          }
+          return i;
+        });
 
-        if (updatedItems.length === 0) {
-          // Tüm ürünler iade edildiyse siparişi sil
-          await deleteDoc(doc($db, 'orders', order.id));
-        } else {
-          // Siparişi güncelle
-          await updateDoc(doc($db, 'orders', order.id), {
-            items: updatedItems,
-            totalAmount: updatedTotalAmount
-          });
-        }
+        // Siparişi güncelle
+        await updateDoc(doc($db, 'orders', order.id), {
+          items: updatedItems
+        });
 
         // Siparişleri ve iadeleri yeniden yükle
         await this.loadUserOrders();
@@ -320,15 +347,10 @@ export default {
         alert('Ürün başarıyla iade edildi.');
       } catch (error) {
         console.error('İade işlemi sırasında hata:', error);
-        alert('İade işlemi sırasında bir hata oluştu: ' + error.message);
+        alert('İade işlemi sırasında bir hata oluştu!');
       }
     },
     async returnEntireOrder(order) {
-      if (!this.canReturn(order.orderDate)) {
-        alert('Sipariş Verildikten 5 Dakika Sonra İade Edilemez');
-        return;
-      }
-
       try {
         const { $db } = useNuxtApp();
         
@@ -342,19 +364,28 @@ export default {
             price: item.price,
             quantity: item.quantity,
             image: item.image,
+            size: item.size, // Beden bilgisini ekle
             totalPrice: item.totalPrice
           })),
           totalAmount: order.totalAmount,
           returnDate: new Date(),
-          orderDate: order.orderDate,
-          status: 'completed'
+          isFullReturn: true
         };
 
-        // Önce iade kaydını oluştur
+        // İade kaydını oluştur
         await addDoc(collection($db, 'returns'), returnData);
 
-        // Sonra siparişi sil
-        await deleteDoc(doc($db, 'orders', order.id));
+        // Tüm ürünleri iade edildi olarak işaretle
+        const updatedItems = order.items.map(item => ({
+          ...item,
+          isReturned: true
+        }));
+
+        // Siparişi güncelle
+        await updateDoc(doc($db, 'orders', order.id), {
+          items: updatedItems,
+          isFullyReturned: true
+        });
 
         // Siparişleri ve iadeleri yeniden yükle
         await this.loadUserOrders();
@@ -363,7 +394,7 @@ export default {
         alert('Sipariş başarıyla iade edildi.');
       } catch (error) {
         console.error('İade işlemi sırasında hata:', error);
-        alert('İade işlemi sırasında bir hata oluştu: ' + error.message);
+        alert('İade işlemi sırasında bir hata oluştu!');
       }
     },
     async loadUserReturns() {
@@ -375,14 +406,34 @@ export default {
         const q = query(returnsRef, where('userId', '==', this.loggedInUser.id));
         const querySnapshot = await getDocs(q);
         
-        this.userReturns = querySnapshot.docs.map(doc => {
+        // Tüm iadeleri grupla (orderId'ye göre)
+        const returnsByOrder = {};
+        querySnapshot.docs.forEach(doc => {
           const data = doc.data();
-          return {
+          const orderId = data.orderId;
+          
+          if (!returnsByOrder[orderId]) {
+            returnsByOrder[orderId] = [];
+          }
+          returnsByOrder[orderId].push({
             id: doc.id,
             ...data,
             returnDate: data.returnDate.toDate(),
-            orderDate: data.orderDate.toDate()
-          };
+            // orderDate alanı yoksa returnDate'i kullan
+            orderDate: data.orderDate ? data.orderDate.toDate() : data.returnDate.toDate()
+          });
+        });
+
+        // Her sipariş için en son iadeyi al (tam iade varsa onu göster)
+        this.userReturns = Object.values(returnsByOrder).map(returns => {
+          // Tam iade varsa onu göster
+          const fullReturn = returns.find(r => r.isFullReturn);
+          if (fullReturn) {
+            return fullReturn;
+          }
+          // Yoksa en son iadeyi göster
+          returns.sort((a, b) => b.returnDate - a.returnDate);
+          return returns[0];
         });
 
         // İadeleri tarihe göre sırala (en yeniden en eskiye)
