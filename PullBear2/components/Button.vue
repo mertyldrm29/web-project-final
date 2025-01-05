@@ -134,10 +134,33 @@
         </div>
 
         <!-- Müşteri Hizmetleri Ekranı -->
-        <div v-else-if="currentPage === 'customer-services'">
+        <div v-else-if="currentPage === 'customer-services'" class="customer-services-page">
           <h3>Bize Ulaşın</h3>
-          <h4>Mail Adresimiz: contact.tr@pullandbear.com </h4>
-          <h4>Telefon Numaramız: +90 (534) 982 5582</h4>
+          <div v-if="loading" class="loading">
+            Yükleniyor...
+          </div>
+          <div v-else class="contact-info">
+            <div class="contact-item">
+              <span class="material-icons">email</span>
+              <h4>Mail Adresimiz:</h4>
+              <p>{{ contactInfo.email }}</p>
+            </div>
+            <div class="contact-item">
+              <span class="material-icons">phone</span>
+              <h4>Telefon Numaramız:</h4>
+              <p>{{ contactInfo.phone }}</p>
+            </div>
+            <div class="contact-item">
+              <span class="material-icons">schedule</span>
+              <h4>Çalışma Saatlerimiz:</h4>
+              <p>{{ contactInfo.workingHours }}</p>
+            </div>
+            <div class="contact-item">
+              <span class="material-icons">location_on</span>
+              <h4>Adresimiz:</h4>
+              <p>{{ contactInfo.address }}</p>
+            </div>
+          </div>
           <button @click="goBack" class="back-button">Geri</button>
         </div>
       </div>
@@ -159,6 +182,13 @@ export default {
       loggedInUser: null,
       userOrders: [],
       userReturns: [],
+      contactInfo: {
+        email: '',
+        phone: '',
+        workingHours: '',
+        address: ''
+      },
+      loading: false
     };
   },
   methods: {
@@ -176,8 +206,9 @@ export default {
       this.currentPage = "returns";
       await this.loadUserReturns();
     },
-    openCServicesPage() {
+    async openCServicesPage() {
       this.currentPage = "customer-services";
+      await this.loadCustomerServices();
     },
     closeModal() {
       this.showModal = false;
@@ -492,6 +523,28 @@ export default {
           )
         );
       });
+    },
+    async loadCustomerServices() {
+      try {
+        this.loading = true;
+        const { $db } = useNuxtApp();
+        const customerServicesRef = collection($db, 'customer-services');
+        const querySnapshot = await getDocs(customerServicesRef);
+        
+        if (!querySnapshot.empty) {
+          const data = querySnapshot.docs[0].data();
+          this.contactInfo = {
+            email: data.email || '',
+            phone: data.phone || '',
+            workingHours: data.workingHours || '',
+            address: data.address || ''
+          };
+        }
+      } catch (error) {
+        console.error('Müşteri hizmetleri bilgileri yüklenirken hata:', error);
+      } finally {
+        this.loading = false;
+      }
     },
   },
   mounted() {
@@ -881,5 +934,57 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.customer-services-page {
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 20px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.loading {
+  text-align: center;
+  padding: 20px;
+  background-color: #f8f8f8;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.contact-item span {
+  font-size: 1.2em;
+  color: #666;
+}
+
+.contact-item h4 {
+  margin: 0;
+  font-size: 0.95em;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contact-item p {
+  margin: 0;
+  font-size: 0.9em;
+  color: #666;
 }
 </style>
