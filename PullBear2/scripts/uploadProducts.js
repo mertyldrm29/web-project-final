@@ -16,8 +16,8 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 const products = [
-    { id: 1, name: 'Standart Jean', price: 1190, image: 'https://static.pullandbear.net/assets/public/e351/34bc/c06b4bf2b2df/495799ffcb9e/07686909811-A1M/07686909811-A1M.jpg?ts=1720176348836&w=882&f=auto',hoverImage:'https://static.pullandbear.net/assets/public/2251/fec2/a02c4bccb99f/d825aaf53952/07686909811-A2M/07686909811-A2M.jpg?ts=1720176372156&w=882&f=auto' ,category: 'jeans', gender: 'men',subJeans:'jean' },
-    { id: 2, name: 'The Godfather Baskılı T-shirt', price: 760, image: 'https://static.pullandbear.net/assets/public/f547/12f1/010e4302bd12/5ac6897a95d8/03245524250-A7M/03245524250-A7M.jpg?ts=1732011582466&w=882&f=auto',hoverImage:'https://static.pullandbear.net/assets/public/8b18/73e6/4d4448b8b2ff/755ecb2e2556/03245524250-A1M/03245524250-A1M.jpg?ts=1731929326118&w=882&f=auto', category: 'tshirts', gender: 'men',subTshirt: ['grafic','tisort'] },
+    { id: 1, name: 'Standart Jean', price: 1190, image: 'https://static.pullandbear.net/assets/public/e351/34bc/c06b4bf2b2df/495799ffcb9e/07686909811-A1M/07686909811-A1M.jpg?ts=1720176348836&w=882&f=auto',hoverImage:'https://static.pullandbear.net/assets/public/2251/fec2/a02c4bccb99f/d825aaf53952/07686909811-A2M/07686909811-A2M.jpg?ts=1720176372156&w=882&f=auto' ,category: 'jeans', gender: 'men',subJeans:'jean', sizes: { S: 5, M: 8, L: 3, XL: 4 } },
+    { id: 2, name: 'The Godfather Baskılı T-shirt', price: 760, image: 'https://static.pullandbear.net/assets/public/f547/12f1/010e4302bd12/5ac6897a95d8/03245524250-A7M/03245524250-A7M.jpg?ts=1732011582466&w=882&f=auto',hoverImage:'https://static.pullandbear.net/assets/public/8b18/73e6/4d4448b8b2ff/755ecb2e2556/03245524250-A1M/03245524250-A1M.jpg?ts=1731929326118&w=882&f=auto', category: 'tshirts', gender: 'men',subTshirt: ['grafic','tisort'], sizes: { S: 3, M: 6, L: 7, XL: 2 } },
     { id: 3, name: 'STWD Kapüşonlu Şişme Mont', price: 1290, hoverImage: 'https://static.pullandbear.net/assets/public/0777/2fff/7b4045c79850/900b2b74af7d/07710576711-A2M/07710576711-A2M.jpg?ts=1728291137542&w=882&f=auto',image:'https://static.pullandbear.net/assets/public/4794/49fe/96454677aaf7/94f8a211330d/07710576711-A1M/07710576711-A1M.jpg?ts=1728291147749&w=882&f=auto' ,category: 'jackets', gender: 'men',subJackets:'mont' },
     { id: 4, name: 'Soluk Efektli Sweatshirt', price: 1190, image: 'https://static.pullandbear.net/assets/public/d652/8472/8ddd4d569446/278df42939cd/07590550700-A1M/07590550700-A1M.jpg?ts=1728290845274&w=882&f=auto',hoverImage:'https://static.pullandbear.net/assets/public/fa72/fd5a/43c24c4d802a/3b8ef8a112b2/07590550700-A7M/07590550700-A7M.jpg?ts=1728375724271&w=882&f=auto', category: 'sweatshirts', gender: 'men',subSweatshirts:['sweatshirt','nohoodie'] },
     { id: 5, name: 'Kapüşonlu Basic Sweatshirt', price: 1090, image: 'https://static.pullandbear.net/assets/public/da86/e2a8/88a74ede908b/0be802499d7a/07591513807-A1M/07591513807-A1M.jpg?ts=1723208088928&w=882&f=auto',hoverImage:'https://static.pullandbear.net/assets/public/3012/1330/565445749588/67d2ca7ff782/07591513807-A2M/07591513807-A2M.jpg?ts=1723208081181&w=882&f=auto', category: 'sweatshirts', gender: 'men',subSweatshirts:['sweatshirt','hoodie'] },
@@ -58,16 +58,31 @@ const products = [
     { id: 40, name: 'San Francisco grafik baskılı ve kapüşonlu sweatshirt', price: 1190, image: 'https://static.pullandbear.net/assets/public/9102/c9bf/d1a84895aa0d/57ea7751a16f/03594317506-A1M/03594317506-A1M.jpg?ts=1732803383348&w=882&f=auto',hoverImage:'https://static.pullandbear.net/assets/public/4679/d846/bcb54c2daf0c/2b8544e25794/03594317506-A7M/03594317506-A7M.jpg?ts=1733314930652&w=882&f=auto' ,category: 'sweatshirts', gender: 'women',subSweatshirts:['hoodie','sweatshirt'] },
   ];
 
+// Tüm ürünlere rastgele stok ekleyen yardımcı fonksiyon
+function addRandomSizesToProducts() {
+    return products.map(product => ({
+        ...product,
+        sizes: {
+            S: Math.round(Math.random()),  // 0 veya 1
+            M: Math.round(Math.random()),
+            L: Math.round(Math.random()),
+            XL: Math.round(Math.random())
+        }
+    }));
+}
+
+const productsWithSizes = addRandomSizesToProducts();
+
 async function uploadProducts() {
-  try {
-    for (const product of products) {
-      await addDoc(collection(db, "products"), product);
-      console.log(`Ürün eklendi: ${product.name}`);
+    try {
+        for (const product of productsWithSizes) {
+            await addDoc(collection(db, "products"), product);
+            console.log(`Ürün eklendi: ${product.name}`);
+        }
+        console.log("Tüm ürünler başarıyla yüklendi!");
+    } catch (error) {
+        console.error("Hata oluştu:", error);
     }
-    console.log("Tüm ürünler başarıyla yüklendi!");
-  } catch (error) {
-    console.error("Hata oluştu:", error);
-  }
 }
 
 // Script'i çalıştır
