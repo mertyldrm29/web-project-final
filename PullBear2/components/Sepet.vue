@@ -290,36 +290,56 @@ export default {
       }
     },
     async clearCart(isOrder = false) {
+  try {
+    const { $db } = useNuxtApp();
+    console.log('clearCart başladı, isOrder:', isOrder);
+
+    // Sepetteki her ürün için işlem yap
+    for (const item of this.cartItems) {
       try {
-        const { $db } = useNuxtApp();
-        
-        // Her ürün için stok güncelleme ve silme işlemlerini yap
-        const promises = this.cartItems.map(async (item) => {
-          // Eğer sipariş verilmiyorsa (normal sepet temizleme) stokları güncelle
-          if (!isOrder) {
-            // Ürünün Firestore ID'sini bul
-            const productsRef = collection($db, 'products');
-            const q = query(productsRef, where('id', '==', Number(item.productId)));
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
-              const productDoc = querySnapshot.docs[0];
-              // Ürün stoğunu tekrar mevcut yap
-              await updateDoc(doc($db, 'products', productDoc.id), {
-                [`sizes.${item.size}`]: 1
-              });
-            }
+        const productsRef = collection($db, 'products');
+        const q = query(productsRef, where('id', '==', Number(item.productId)));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const productDoc = querySnapshot.docs[0];
+
+          // Ürünün stok bilgilerini güncelle
+          const productData = productDoc.data();
+          const currentSizeStock = productData.sizes[item.size];
+
+          if (currentSizeStock !== undefined) {
+            const updatedSizeStock = currentSizeStock + item.quantity;
+            await updateDoc(doc($db, 'products', productDoc.id), {
+              [`sizes.${item.size}`]: updatedSizeStock,
+            });
+            console.log(`Stok güncellendi: Ürün ID: ${item.productId}, Beden: ${item.size}, Yeni Stok: ${updatedSizeStock}`);
+          } else {
+            console.warn(`Stok bilgisi bulunamadı: Ürün ID: ${item.productId}, Beden: ${item.size}`);
           }
-          
-          // Sepetten ürünü kaldır
-          return deleteDoc(doc($db, 'cart', String(item.id)));
-        });
-        
-        await Promise.all(promises);
-      } catch (error) {
-        console.error('Sepet temizlenirken hata:', error);
+        } else {
+          console.warn(`Ürün bulunamadı: ID = ${item.productId}`);
+        }
+
+        // Sepetten ürünü sil
+        await deleteDoc(doc($db, 'cart', String(item.id)));
+        console.log('Ürün sepetten silindi:', item.id);
+      } catch (itemError) {
+        console.error(`Ürün (${item.productId}) temizlenirken hata oluştu:`, itemError);
       }
-    },
+    }
+
+    if (!isOrder) {
+      alert('Sepetiniz temizlendi!');
+    }
+    console.log('clearCart tamamlandı');
+  } catch (error) {
+    console.error('Sepet temizlenirken hata:', error);
+    alert('Sepet temizlenirken bir hata oluştu!');
+  }
+},
+
+
     async placeOrder() {
       // Sipariş vermeden önce kullanıcı durumunu tekrar kontrol et
       this.checkAuthStatus();
