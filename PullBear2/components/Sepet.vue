@@ -358,22 +358,7 @@ export default {
       try {
         const { $db } = useNuxtApp();
 
-        // Önce tüm ürünlerin stoklarını güncelle
-        for (const item of this.cartItems) {
-          const productsRef = collection($db, 'products');
-          const q = query(productsRef, where('id', '==', Number(item.productId)));
-          const querySnapshot = await getDocs(q);
-          
-          if (!querySnapshot.empty) {
-            const productDoc = querySnapshot.docs[0];
-            // Ürün stoğunu sıfırla (tükenmiş olarak işaretle)
-            await updateDoc(doc($db, 'products', productDoc.id), {
-              [`sizes.${item.size}`]: 0
-            });
-          }
-        }
-        
-        // Siparişi oluştur
+        // Önce siparişi oluştur
         const order = {
           userId: String(this.loggedInUser.id),
           items: this.cartItems.map(item => ({
@@ -393,12 +378,33 @@ export default {
         // Siparişi Firestore'a kaydet
         await addDoc(collection($db, 'orders'), order);
 
-        // Sepeti temizle (isOrder=true ile çağır)
-        await this.clearCart(true);
+        // Stokları güncelle ve sepeti temizle
+        for (const item of this.cartItems) {
+          try {
+            // Ürünün stoğunu güncelle
+            const productsRef = collection($db, 'products');
+            const q = query(productsRef, where('id', '==', Number(item.productId)));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+              const productDoc = querySnapshot.docs[0];
+              // Stok 0 olarak güncelle
+              await updateDoc(doc($db, 'products', productDoc.id), {
+                [`sizes.${item.size}`]: 0
+              });
+              console.log(`Stok sıfırlandı: Ürün ID: ${item.productId}, Beden: ${item.size}`);
+            }
+
+            // Sepetten ürünü sil
+            await deleteDoc(doc($db, 'cart', String(item.id)));
+            console.log(`Ürün sepetten silindi: ${item.id}`);
+          } catch (error) {
+            console.error(`Ürün işlenirken hata: ${item.productId}`, error);
+          }
+        }
 
         // Sepet panelini kapat
         this.isCartOpen = false;
-
         alert('Siparişiniz başarıyla oluşturuldu!');
       } catch (error) {
         console.error('Sipariş oluşturulurken hata:', error);
