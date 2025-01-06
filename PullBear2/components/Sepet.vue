@@ -195,16 +195,25 @@ export default {
       try {
         const { $db } = useNuxtApp();
         
-        // Önce ürünün stok durumunu kontrol et
-        const productRef = doc($db, 'products', String(item.productId));
-        const productDoc = await getDoc(productRef);
+        // Önce ürünün ID'sini bulmak için products koleksiyonunu sorgula
+        const productsRef = collection($db, 'products');
+        const q = query(productsRef, where('id', '==', Number(item.productId)));
+        const querySnapshot = await getDocs(q);
         
-        if (!productDoc.exists()) {
-          console.error('Ürün bulunamadı');
+        if (querySnapshot.empty) {
+          console.error('Ürün bulunamadı:', item.productId);
+          alert('Ürün bulunamadı! Lütfen sayfayı yenileyip tekrar deneyin.');
           return;
         }
-        
+
+        // Her ürünün sadece 1 stoğu olduğu için artırma işlemi yapılamaz
+        alert('Bu ürünün stoğu tükenmiştir!');
+        return;
+
+        /* Eski stok kontrolü ve artırma kodu
+        const productDoc = querySnapshot.docs[0];
         const product = productDoc.data();
+        
         if (product.sizes[item.size] === 0) {
           alert('Bu bedende ürün tükendi!');
           return;
@@ -220,9 +229,10 @@ export default {
         });
         
         // Stok durumunu güncelle
-        await updateDoc(productRef, {
-          [`sizes.${item.size}`]: 0 // Ürün sepete eklendiğinde stok tükenir
+        await updateDoc(doc($db, 'products', productDoc.id), {
+          [`sizes.${item.size}`]: 0
         });
+        */
       } catch (error) {
         console.error('Miktar artırılırken hata:', error);
       }
@@ -260,12 +270,15 @@ export default {
       try {
         const { $db } = useNuxtApp();
         
-        // Ürün stoğunu tekrar mevcut yap
-        const productRef = doc($db, 'products', String(item.productId));
-        const productDoc = await getDoc(productRef);
+        // Ürünün Firestore ID'sini bul
+        const productsRef = collection($db, 'products');
+        const q = query(productsRef, where('id', '==', Number(item.productId)));
+        const querySnapshot = await getDocs(q);
         
-        if (productDoc.exists()) {
-          await updateDoc(productRef, {
+        if (!querySnapshot.empty) {
+          const productDoc = querySnapshot.docs[0];
+          // Ürün stoğunu tekrar mevcut yap
+          await updateDoc(doc($db, 'products', productDoc.id), {
             [`sizes.${item.size}`]: 1 // Ürün sepetten çıkarıldığında stok mevcut olur
           });
         }
@@ -276,12 +289,32 @@ export default {
         console.error('Ürün sepetten kaldırılırken hata:', error);
       }
     },
-    async clearCart() {
+    async clearCart(isOrder = false) {
       try {
         const { $db } = useNuxtApp();
-        const promises = this.cartItems.map(item => 
-          deleteDoc(doc($db, 'cart', String(item.id)))
-        );
+        
+        // Her ürün için stok güncelleme ve silme işlemlerini yap
+        const promises = this.cartItems.map(async (item) => {
+          // Eğer sipariş verilmiyorsa (normal sepet temizleme) stokları güncelle
+          if (!isOrder) {
+            // Ürünün Firestore ID'sini bul
+            const productsRef = collection($db, 'products');
+            const q = query(productsRef, where('id', '==', Number(item.productId)));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              const productDoc = querySnapshot.docs[0];
+              // Ürün stoğunu tekrar mevcut yap
+              await updateDoc(doc($db, 'products', productDoc.id), {
+                [`sizes.${item.size}`]: 1
+              });
+            }
+          }
+          
+          // Sepetten ürünü kaldır
+          return deleteDoc(doc($db, 'cart', String(item.id)));
+        });
+        
         await Promise.all(promises);
       } catch (error) {
         console.error('Sepet temizlenirken hata:', error);
@@ -304,6 +337,21 @@ export default {
 
       try {
         const { $db } = useNuxtApp();
+
+        // Önce tüm ürünlerin stoklarını güncelle
+        for (const item of this.cartItems) {
+          const productsRef = collection($db, 'products');
+          const q = query(productsRef, where('id', '==', Number(item.productId)));
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            const productDoc = querySnapshot.docs[0];
+            // Ürün stoğunu sıfırla (tükenmiş olarak işaretle)
+            await updateDoc(doc($db, 'products', productDoc.id), {
+              [`sizes.${item.size}`]: 0
+            });
+          }
+        }
         
         // Siparişi oluştur
         const order = {
@@ -325,8 +373,8 @@ export default {
         // Siparişi Firestore'a kaydet
         await addDoc(collection($db, 'orders'), order);
 
-        // Sepeti temizle
-        await this.clearCart();
+        // Sepeti temizle (isOrder=true ile çağır)
+        await this.clearCart(true);
 
         // Sepet panelini kapat
         this.isCartOpen = false;
