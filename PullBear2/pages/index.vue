@@ -1,72 +1,331 @@
 <template>
   <div class="home-page">
-    <!-- Logo -->
     <div class="logo-container">
       <img src="https://static.pullandbear.net/2/static2/img/headLogo/logo_pull_black_new.svg" alt="Logo" class="logo" />
     </div>
-    <Button @user-logged-in="handleUserLogin" @user-logged-out="handleUserLogout" />
-    <Sepet ref="sepetComponent" />
-    <Menu />
-    <Search />
+    <Menu :isNewProducts="false" />
+    <Search 
+      :isIndex="true"
+      :isJeans="false"
+      :isNewProducts="false"
+      @search="handleSearch"
+    />
+    <Button 
+      :user="loggedInUser" 
+      @return-item="handleReturnItem" 
+      @return-entire-order="handleReturnEntireOrder" 
+      @open-orders="handleOpenOrders"
+      @open-returns="handleOpenReturns"
+      @open-customer-service="handleOpenCustomerService"
+      @login="handleUserLogin"
+      @register="handleRegister"
+      @logout="handleUserLogout"
+    />
+    <Sepet
+      :cart-items="cartItems" 
+      :is-cart-open="isCartOpen"
+      @toggle-cart="handleToggleCart"
+      @update-quantity="handleUpdateQuantity"
+      @remove-from-cart="handleRemoveFromCart"
+      @clear-cart="handleClearCart"
+    />
     <ImageWithButton />
     <Carousel />
     <Influencer />
     <Video />
-    <Subscription />
+    <Subscription 
+      @subscribe="handleSubscribe"
+      @unsubscribe="handleUnsubscribe"
+    />
     <Footer />
   </div>
 </template>
 
-<script setup>
-import { ref } from "vue";
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useNuxtApp } from '#app'
+import { storeToRefs } from 'pinia'
+import { useAuthStore } from '@/stores/auth'
+import { useCartStore } from '@/stores/cart'
+import { collection, query, getDocs, addDoc, updateDoc, doc, where, deleteDoc, type Firestore } from 'firebase/firestore'
+import { useRouter } from 'vue-router'
 
-// Menü ve Kategoriler
-const isMenuVisible = ref(false);
-const categories = ["erkek", "kadın"];
-const selectedCategory = ref("erkek");
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  size: string;
+  quantity: number;
+  totalPrice: number;
+  userId: string;
+  productId: string;
+}
 
-const toggleMenu = () => {
-  isMenuVisible.value = !isMenuVisible.value;
-};
+interface User {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
+}
 
-const selectCategory = (category) => {
-  selectedCategory.value = category;
-  isMenuVisible.value = false; // Kategori seçilince menüyü kapat
-};
+interface Order {
+  id: string;
+  orderDate: Date;
+  items: OrderItem[];
+  totalAmount: number;
+}
 
-// Componentlerin İmport Edilmesi
-import Sepet from "@/components/Sepet.vue";
-import Search from "@/components/Search.vue";
-import Menu from "@/components/Menu.vue";
-import Footer from "@/components/Footer.vue";
-import Carousel from "@/components/Carousel.vue";
-import ImageWithButton from "@/components/ImageWithButton.vue";
-import Button from "@/components/Button.vue";
-import Influencer from "@/components/Influencer.vue";
-import Products from "@/components/Products.vue";
-import Video from "@/components/Video.vue";
-import Subscription from "@/components/Subscription.vue";
+interface OrderItem {
+  productId: string;
+  name: string;
+  price: number;
+  quantity: number;
+  size: string;
+  totalPrice: number;
+  image: string;
+  isReturned?: boolean;
+}
 
-const handleUserLogin = (user) => {
-  // Sepet bileşenine kullanıcı bilgisini ilet
-  if (sepetComponent.value) {
-    sepetComponent.value.handleUserLogin(user);
+const { $db } = useNuxtApp()
+const authStore = useAuthStore()
+const cartStore = useCartStore()
+const router = useRouter()
+
+const { loggedInUser } = storeToRefs(authStore)
+const { cartItems, isCartOpen } = storeToRefs(cartStore)
+
+const searchResults = ref<Product[]>([])
+const searchLoading = ref<boolean>(false)
+const loading = ref<boolean>(false)
+
+onMounted(async () => {
+  try {
+    loading.value = true
+    const userId = loggedInUser.value?.id || '1'
+    await cartStore.setupCartListener($db as Firestore, userId)
+    await cartStore.checkAndUpdateCart($db as Firestore, userId)
+    await authStore.loadUserOrders($db as Firestore)
+    await authStore.loadUserReturns($db as Firestore)
+    await authStore.loadCustomerServices($db as Firestore)
+  } catch (err) {
+    console.error('Mounted error:', err)
+  } finally {
+    loading.value = false
   }
-};
+})
 
-const handleUserLogout = () => {
-  // Sepet bileşenine çıkış yapıldığını bildir
-  if (sepetComponent.value) {
-    sepetComponent.value.handleUserLogout();
+onBeforeUnmount(() => {
+  if (cartStore.unsubscribe) {
+    cartStore.unsubscribe()
   }
-};
+})
 
-const sepetComponent = ref(null);
+const handleSearch = async (query: string): Promise<void> => {
+  router.push({
+    path: '/search',
+    query: { q: query }
+  })
+}
 
-// Sayfa yüklendiğinde localStorage'dan kullanıcı bilgilerini kontrol et
-const savedUser = localStorage.getItem('loggedInUser');
-if (savedUser && sepetComponent.value) {
-  sepetComponent.value.handleUserLogin(JSON.parse(savedUser));
+const handleAddToCart = async (product: Product): Promise<void> => {
+  try {
+    const userId = loggedInUser.value?.id || '1'
+    await cartStore.addToCart($db as Firestore, userId, product)
+    alert('Ürün sepete eklendi!')
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Bu ürünün stoğu tükenmiştir!') {
+      alert('Bu ürünün stoğu tükenmiştir!')
+    } else {
+      console.error('Add to cart error:', err)
+      alert('Ürün sepete eklenirken bir hata oluştu.')
+    }
+  }
+}
+
+const handleUserLogin = async (user: User): Promise<void> => {
+  try {
+    await authStore.loginUser($db as Firestore, user)
+    if (user && user.id) {
+      await cartStore.setupCartListener($db as Firestore, user.id)
+      await cartStore.checkAndUpdateCart($db as Firestore, user.id)
+    }
+  } catch (err) {
+    console.error('Login error:', err)
+    alert('Giriş yapılırken bir hata oluştu.')
+  }
+}
+
+const handleUserLogout = async (): Promise<void> => {
+  try {
+    await authStore.logoutUser()
+    cartStore.toggleCart(false)
+    await cartStore.setupCartListener($db as Firestore, '1')
+  } catch (err) {
+    console.error('Logout error:', err)
+    alert('Çıkış yapılırken bir hata oluştu.')
+  }
+}
+
+const handleRegister = async (user: User): Promise<void> => {
+  try {
+    await authStore.registerUser($db as Firestore, user)
+    alert('Kayıt başarılı! Giriş yapabilirsiniz.')
+  } catch (err) {
+    console.error('Register error:', err)
+    alert('Kayıt olurken bir hata oluştu.')
+  }
+}
+
+const handleToggleCart = (): void => {
+  cartStore.toggleCart()
+}
+
+const handleUpdateQuantity = async (item: Product, change: number): Promise<void> => {
+  try {
+    if (change > 0) {
+      await cartStore.increaseQuantity($db as Firestore, item)
+    } else if (change < 0) {
+      await cartStore.decreaseQuantity($db as Firestore, item)
+    }
+  } catch (err) {
+    console.error('Update quantity error:', err)
+    alert('Miktar güncellenirken bir hata oluştu.')
+  }
+}
+
+const handleRemoveFromCart = async (item: Product): Promise<void> => {
+  try {
+    const userId = loggedInUser.value?.id || '1'
+    await cartStore.removeFromCart($db as Firestore, item)
+    await cartStore.checkAndUpdateCart($db as Firestore, userId)
+    await cartStore.setupCartListener($db as Firestore, userId)
+  } catch (err) {
+    console.error('Remove from cart error:', err)
+    alert('Ürün sepetten çıkarılırken bir hata oluştu.')
+  }
+}
+
+const handleClearCart = async (): Promise<void> => {
+  try {
+    const userId = loggedInUser.value?.id || '1'
+    await cartStore.clearCart($db as Firestore, userId)
+    await cartStore.checkAndUpdateCart($db as Firestore, userId)
+    await cartStore.setupCartListener($db as Firestore, userId)
+    alert('Sepet başarıyla temizlendi!')
+  } catch (err) {
+    console.error('Clear cart error:', err)
+    alert('Sepet temizlenirken bir hata oluştu.')
+  }
+}
+
+const handleOpenOrders = async (): Promise<void> => {
+  try {
+    loading.value = true
+    await authStore.loadUserOrders($db as Firestore)
+  } catch (err) {
+    console.error('Load orders error:', err)
+    alert('Siparişler yüklenirken bir hata oluştu.')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleOpenReturns = async (): Promise<void> => {
+  try {
+    loading.value = true
+    await authStore.loadUserReturns($db as Firestore)
+  } catch (err) {
+    console.error('Load returns error:', err)
+    alert('İadeler yüklenirken bir hata oluştu.')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleOpenCustomerService = async (): Promise<void> => {
+  try {
+    loading.value = true
+    await authStore.loadCustomerServices($db as Firestore)
+  } catch (err) {
+    console.error('Load customer service error:', err)
+    alert('Müşteri hizmetleri yüklenirken bir hata oluştu.')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleReturnItem = async (order: Order, item: OrderItem): Promise<void> => {
+  try {
+    loading.value = true
+    await authStore.returnOrderItem($db as Firestore, order, item)
+    await handleOpenOrders()
+    await handleOpenReturns()
+    alert('Ürün iade işlemi başarıyla tamamlandı.')
+  } catch (err) {
+    console.error('Return item error:', err)
+    alert('Ürün iade edilirken bir hata oluştu.')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleReturnEntireOrder = async (order: Order): Promise<void> => {
+  try {
+    loading.value = true
+    await authStore.returnEntireOrder($db as Firestore, order)
+    await handleOpenOrders()
+    await handleOpenReturns()
+    alert('Sipariş iade işlemi başarıyla tamamlandı.')
+  } catch (err) {
+    console.error('Return order error:', err)
+    alert('Sipariş iade edilirken bir hata oluştu.')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSubscribe = async (email: string): Promise<void> => {
+  try {
+    const subscribersRef = collection($db as Firestore, 'subscribers')
+    const q = query(subscribersRef, where('email', '==', email))
+    const querySnapshot = await getDocs(q)
+
+    if (!querySnapshot.empty) {
+      alert('Bu email adresi zaten kayıtlı!')
+      return
+    }
+
+    await addDoc(subscribersRef, {
+      email,
+      subscriptionDate: new Date()
+    })
+
+    alert('Bültenimize başarıyla abone oldunuz!')
+  } catch (err) {
+    console.error('Subscribe error:', err)
+    alert('Abonelik işlemi sırasında bir hata oluştu.')
+  }
+}
+
+const handleUnsubscribe = async (email: string): Promise<void> => {
+  try {
+    const subscribersRef = collection($db as Firestore, 'subscribers')
+    const q = query(subscribersRef, where('email', '==', email))
+    const querySnapshot = await getDocs(q)
+
+    if (querySnapshot.empty) {
+      alert('Bültenimizde kayıtlı değilsiniz!')
+      return
+    }
+
+    const docRef = doc($db as Firestore, 'subscribers', querySnapshot.docs[0].id)
+    await deleteDoc(docRef)
+    alert('Bülten aboneliğiniz başarıyla iptal edildi!')
+  } catch (err) {
+    console.error('Unsubscribe error:', err)
+    alert('Abonelik iptali sırasında bir hata oluştu.')
+  }
 }
 </script>
 
@@ -74,113 +333,47 @@ if (savedUser && sepetComponent.value) {
 .home-page {
   padding: 0px;
   text-align: center;
-}
-
-.category-selection {
-  display: flex;
-  justify-content: center;
-  gap: 40px;
-  margin-top: 40px;
-}
-
-.category-card {
-  text-decoration: none;
-  color: inherit;
-  background-color: #f8f8f8;
-  padding: 40px;
-  border-radius: 8px;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.category-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-}
-
-h2 {
-  margin: 0;
-  font-size: 1.5em;
-}
-
-#app {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-family: Arial, sans-serif;
-  padding: 20px;
-}
-
-button {
-  padding: 10px 15px;
-  font-size: 14px;
-  cursor: pointer;
-  border: 1px solid #ccc;
-  background-color: #f5f5f5;
-  border-radius: 4px;
-  transition: all 0.3s ease;
-}
-
-button.active {
-  background-color: #f39c12;
-  color: white;
-  font-weight: bold;
-}
-
-button:hover {
-  background-color: #e0e0e0;
-}
-
-.menu-container {
-  margin-top: -20px;
   position: relative;
 }
 
-.menu-button {
-  display: flex;
-  align-items: center;
-  color: white;
-  padding: 10px;
-  cursor: pointer;
-  border: none;
-  border-radius: 4px;
-}
-
-.menu-button:hover {
-  background-color: black;
-}
-
-.menu-list {
-  position: absolute;
-  top: 50px;
-  left: 0;
-  background-color: #000000;
-  color: white;
-  padding: 10px;
-  border-radius: 5px;
-  width: 200px;
-  z-index: 10;
-}
-
-.category-options {
-  display: flex;
-  gap: 10px;
-}
-
-.dynamic-component {
-  width: 100%;
-  text-align: center;
-  margin-top: 20px;
-}
-
 .logo-container {
-  margin-top: 0px;
   display: flex;
   justify-content: center;
   width: 100%;
+  position: fixed;
+  top: 50px;
+  z-index: 999;
 }
 
 .logo {
   max-width: 200px;
+}
+
+/* Mobil Tasarım */
+@media screen and (max-width: 768px) {
+  .home-page {
+    padding: 0;
+  }
+
+  .logo-container {
+    position: fixed;
+    top: 20px;
+    padding: 10px;
+  }
+
+  .logo {
+    max-width: 150px;
+  }
+}
+
+/* Küçük Mobil Cihazlar */
+@media screen and (max-width: 480px) {
+  .logo-container {
+    top: 10px;
+  }
+
+  .logo {
+    max-width: 120px;
+  }
 }
 </style> 
