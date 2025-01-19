@@ -34,19 +34,20 @@
     </div>
   </template>
   
-  <script>
-  export default {
-    data() {
-      return {
-        subSweatshirts: 'all', // Varsayılan olarak "Tümünü Gör"
-      };
-    },
-    methods: {
-      applyFilter(filter6) {
-        this.subSweatshirts = filter6;
-        this.$emit('filter-changed', filter6); // Parent component'e filtreyi gönderir
-      },
-    },
+  <script setup lang="ts">
+  import { ref } from 'vue';
+
+  type SubSweatshirtsType = 'all' | 'hoodie' | 'nohoodie' | 'sweatshirt' | 'kazak';
+
+  const subSweatshirts = ref<SubSweatshirtsType>('all');
+
+  const emit = defineEmits<{
+    (e: 'filter-changed', filter: SubSweatshirtsType): void
+  }>();
+
+  const applyFilter = (filter: SubSweatshirtsType): void => {
+    subSweatshirts.value = filter;
+    emit('filter-changed', filter);
   };
   </script>
   

@@ -20,16 +20,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { useNuxtApp } from '#app';
-import { collection, query, getDocs, orderBy, where } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, where, Firestore } from 'firebase/firestore';
+
+interface CarouselItem {
+  id: string;
+  imageUrl: string;
+  title: string;
+  order: number;
+}
 
 // Carousel için resimler
-const items = ref([]);
+const items = ref<CarouselItem[]>([]);
 
 // Aktif slayt
-const currentIndex = ref(0);
+const currentIndex = ref<number>(0);
 
 // Kaydırma stili
 const carouselStyle = ref({
@@ -38,7 +45,7 @@ const carouselStyle = ref({
 });
 
 // Firestore'dan görselleri al
-const fetchCarouselImages = async () => {
+const fetchCarouselImages = async (): Promise<void> => {
   try {
     console.log('Carousel görselleri yükleniyor...');
     const { $db } = useNuxtApp();
@@ -48,7 +55,7 @@ const fetchCarouselImages = async () => {
     }
     console.log('Firestore bağlantısı başarılı, koleksiyon sorgulanıyor...');
     
-    const carouselRef = collection($db, 'carousel');
+    const carouselRef = collection($db as Firestore, 'carousel');
     const q = query(
       carouselRef,
       orderBy('order', 'asc')
@@ -60,31 +67,31 @@ const fetchCarouselImages = async () => {
     items.value = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    }));
+    } as CarouselItem));
     
     console.log('İşlenen carousel verileri:', items.value);
   } catch (error) {
     console.error('Carousel görselleri yüklenirken hata:', error);
     console.error('Hata detayı:', {
-      message: error.message,
-      code: error.code,
-      stack: error.stack
+      message: (error as Error).message,
+      code: (error as { code?: string }).code,
+      stack: (error as Error).stack
     });
   }
 };
 
 // Geçiş fonksiyonları
-const goToSlide = (index) => {
+const goToSlide = (index: number): void => {
   currentIndex.value = index;
   updateCarouselStyle();
 };
 
-const nextSlide = () => {
+const nextSlide = (): void => {
   currentIndex.value = (currentIndex.value + 1) % items.value.length;
   updateCarouselStyle();
 };
 
-const updateCarouselStyle = () => {
+const updateCarouselStyle = (): void => {
   carouselStyle.value = {
     transform: `translateX(-${currentIndex.value * 100}%)`,
     transition: "transform 0.5s ease",

@@ -68,7 +68,7 @@
                   </div>
                   <button 
                     v-else-if="canReturn(order.orderDate) && !isOrderFullyReturned(order.id)" 
-                    @click="returnEntireOrder(order)" 
+                    @click="$emit('return-entire-order', order)" 
                     class="return-btn"
                   >
                     Tüm Siparişi İade Et
@@ -91,7 +91,7 @@
                     <p>Toplam: {{ item.totalPrice }} TL</p>
                     <button 
                       v-if="canReturn(order.orderDate) && !item.isReturned" 
-                      @click="returnItem(order, item)" 
+                      @click="$emit('return-item', order, item)" 
                       class="return-item-btn"
                     >
                       İade Et
@@ -168,403 +168,129 @@
   </div>
 </template>
 
-<script>
-import LoginForm from "./LoginForm.vue";
-import RegisterForm from "./RegisterForm.vue";
-import { useNuxtApp } from '#app';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import LoginForm from "./LoginForm.vue"
+import RegisterForm from "./RegisterForm.vue"
+import { useNuxtApp } from '#app'
+import type { Firestore } from 'firebase/firestore'
+import { useAuthStore } from '~/stores/auth'
+import type { User, Order, OrderItem } from '~/stores/auth'
+import { storeToRefs } from 'pinia'
+import { useCartStore } from '~/stores/cart'
 
-export default {
-  data() {
-    return {
-      showModal: false,
-      currentPage: null,
-      loggedInUser: null,
-      userOrders: [],
-      userReturns: [],
-      contactInfo: {
-        email: '',
-        phone: '',
-        workingHours: '',
-        address: ''
-      },
-      loading: false
-    };
-  },
-  methods: {
-    openLogin() {
-      this.currentPage = "login";
-    },
-    openRegister() {
-      this.currentPage = "register";
-    },
-    async openOrdersPage() {
-      this.currentPage = "orders";
-      await this.loadUserOrders();
-    },
-    async openReturnsPage() {
-      this.currentPage = "returns";
-      await this.loadUserReturns();
-    },
-    async openCServicesPage() {
-      this.currentPage = "customer-services";
-      await this.loadCustomerServices();
-    },
-    closeModal() {
-      this.showModal = false;
-      this.currentPage = null;
-    },
-    goBack() {
-      this.currentPage = null;
-    },
-    async setLoggedInUser(user) {
-      try {
-        const { $db } = useNuxtApp();
-        // Kullanıcı bilgilerini tekrar kontrol et
-        const userDoc = await getDoc(doc($db, 'users', user.id));
-        
-        if (userDoc.exists()) {
-          this.loggedInUser = { id: userDoc.id, ...userDoc.data() };
-          // Kullanıcı bilgilerini localStorage'a kaydet
-          localStorage.setItem('loggedInUser', JSON.stringify(this.loggedInUser));
-          // Üst komponente kullanıcı bilgisini ilet
-          this.$emit('user-logged-in', this.loggedInUser);
-          
-          alert(`Giriş başarılı! Hoşgeldiniz, ${this.loggedInUser.name} ${this.loggedInUser.surname}`);
-          this.goBack();
-        } else {
-          alert('Kullanıcı bulunamadı!');
-        }
-      } catch (error) {
-        console.error('Kullanıcı bilgileri alınırken hata:', error);
-        alert('Bir hata oluştu!');
-      }
-    },
-    handleRegister(userData) {
-      // Kayıt başarılı olduğunda otomatik giriş yap
-      this.setLoggedInUser(userData);
-    },
-    logout() {
-      this.loggedInUser = null;
-      // localStorage'dan kullanıcı bilgilerini sil
-      localStorage.removeItem('loggedInUser');
-      // Üst komponente çıkış yapıldığını bildir
-      this.$emit('user-logged-out');
-      alert("Çıkış yapıldı!");
-      this.closeModal();
-    },
-    // Sayfa yüklendiğinde localStorage'dan kullanıcı bilgilerini kontrol et
-    checkLoggedInUser() {
-      const savedUser = localStorage.getItem('loggedInUser');
-      if (savedUser) {
-        this.loggedInUser = JSON.parse(savedUser);
-        // Üst komponente kullanıcı bilgisini ilet
-        this.$emit('user-logged-in', this.loggedInUser);
-      }
-    },
-    async loadUserOrders() {
-      if (!this.loggedInUser) return;
+const authStore = useAuthStore()
+const { loggedInUser, userOrders, userReturns, contactInfo, loading } = storeToRefs(authStore)
 
-      try {
-        const { $db } = useNuxtApp();
-        const ordersRef = collection($db, 'orders');
-        const q = query(ordersRef, where('userId', '==', this.loggedInUser.id));
-        const querySnapshot = await getDocs(q);
-        
-        this.userOrders = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          orderDate: doc.data().orderDate.toDate()
-        }));
+const showModal = ref<boolean>(false)
+const currentPage = ref<string | null>(null)
 
-        // Siparişleri tarihe göre sırala (en yeniden en eskiye)
-        this.userOrders.sort((a, b) => b.orderDate - a.orderDate);
-      } catch (error) {
-        console.error('Siparişler yüklenirken hata:', error);
-      }
-    },
-    formatDate(date) {
-      return new Date(date).toLocaleDateString('tr-TR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    },
-    canReturn(orderDate) {
-      const now = new Date();
-      const orderTime = new Date(orderDate);
-      const diffInMinutes = (now - orderTime) / (1000 * 60);
-      return diffInMinutes <= 1;
-    },
-    async placeOrder() {
-      try {
-        const { $db } = useNuxtApp();
-        
-        // Siparişi oluştur
-        const order = {
-          userId: this.loggedInUser.id,
-          items: this.cartItems.map(item => ({
-            productId: item.productId,
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            image: item.image,
-            size: item.size, // Beden bilgisini ekle
-            totalPrice: item.totalPrice
-          })),
-          totalAmount: this.calculateTotal,
-          orderDate: new Date(),
-          status: 'completed'
-        };
+const emit = defineEmits<{
+  (e: 'login', user: User): void
+  (e: 'register', user: User): void
+  (e: 'logout'): void
+  (e: 'open-orders'): void
+  (e: 'open-returns'): void
+  (e: 'open-customer-service'): void
+  (e: 'return-item', order: Order, item: OrderItem): void
+  (e: 'return-entire-order', order: Order): void
+}>()
 
-        // Siparişi Firestore'a kaydet
-        await addDoc(collection($db, 'orders'), order);
+const openLogin = (): void => {
+  currentPage.value = "login"
+}
 
-        // Sepeti temizle
-        await this.clearCart();
+const openRegister = (): void => {
+  currentPage.value = "register"
+}
 
-        // Sepet panelini kapat
-        this.isCartOpen = false;
+const openOrdersPage = async (): Promise<void> => {
+  currentPage.value = "orders"
+  emit('open-orders')
+}
 
-        alert('Siparişiniz başarıyla oluşturuldu!');
-      } catch (error) {
-        console.error('Sipariş oluşturulurken hata:', error);
-        alert('Sipariş oluşturulurken bir hata oluştu!');
-      }
-    },
-    async returnItem(order, item) {
-      try {
-        const { $db } = useNuxtApp();
-        
-        // İade kaydı oluştur
-        const returnData = {
-          userId: this.loggedInUser.id,
-          orderId: order.id,
-          items: [{
-            productId: item.productId,
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            image: item.image,
-            size: item.size, // Beden bilgisini ekle
-            totalPrice: item.totalPrice
-          }],
-          totalAmount: item.totalPrice,
-          returnDate: new Date()
-        };
+const openReturnsPage = async (): Promise<void> => {
+  currentPage.value = "returns"
+  emit('open-returns')
+}
 
-        // İade kaydını oluştur
-        await addDoc(collection($db, 'returns'), returnData);
+const openCServicesPage = async (): Promise<void> => {
+  currentPage.value = "customer-services"
+  emit('open-customer-service')
+}
 
-        // Siparişi güncelle - iade edilen ürünün durumunu güncelle
-        const updatedItems = order.items.map(i => {
-          if (i.productId === item.productId && i.size === item.size) { // Beden kontrolü ekle
-            return { ...i, isReturned: true };
-          }
-          return i;
-        });
+const closeModal = (): void => {
+  showModal.value = false
+  currentPage.value = null
+}
 
-        // Siparişi güncelle
-        await updateDoc(doc($db, 'orders', order.id), {
-          items: updatedItems
-        });
+const goBack = (): void => {
+  currentPage.value = null
+}
 
-        // Siparişleri ve iadeleri yeniden yükle
-        await this.loadUserOrders();
-        await this.loadUserReturns();
-        
-        alert('Ürün başarıyla iade edildi.');
-      } catch (error) {
-        console.error('İade işlemi sırasında hata:', error);
-        alert('İade işlemi sırasında bir hata oluştu!');
-      }
-    },
-    async returnEntireOrder(order) {
-      try {
-        const { $db } = useNuxtApp();
-        
-        // İade kaydı oluştur
-        const returnData = {
-          userId: this.loggedInUser.id,
-          orderId: order.id,
-          items: order.items.map(item => ({
-            productId: item.productId,
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            image: item.image,
-            size: item.size, // Beden bilgisini ekle
-            totalPrice: item.totalPrice
-          })),
-          totalAmount: order.totalAmount,
-          returnDate: new Date(),
-          isFullReturn: true
-        };
+const setLoggedInUser = async (user: User): Promise<void> => {
+  try {
+    emit('login', user)
+    goBack()
+  } catch (error) {
+    console.error('Kullanıcı bilgileri alınırken hata:', error)
+    alert('Bir hata oluştu!')
+  }
+}
 
-        // İade kaydını oluştur
-        await addDoc(collection($db, 'returns'), returnData);
+const handleRegister = async (user: User): Promise<void> => {
+  try {
+    emit('register', user)
+    goBack()
+  } catch (error) {
+    console.error('Kayıt olurken hata:', error)
+    alert('Bir hata oluştu!')
+  }
+}
 
-        // Tüm ürünleri iade edildi olarak işaretle
-        const updatedItems = order.items.map(item => ({
-          ...item,
-          isReturned: true
-        }));
+const logout = async (): Promise<void> => {
+  try {
+    emit('logout')
+    closeModal()
+  } catch (error) {
+    console.error('Çıkış yapılırken hata:', error)
+    alert('Bir hata oluştu!')
+  }
+}
 
-        // Siparişi güncelle
-        await updateDoc(doc($db, 'orders', order.id), {
-          items: updatedItems,
-          isFullyReturned: true
-        });
+const formatDate = (date: Date): string => {
+  return new Date(date).toLocaleDateString('tr-TR')
+}
 
-        // Siparişleri ve iadeleri yeniden yükle
-        await this.loadUserOrders();
-        await this.loadUserReturns();
-        
-        alert('Sipariş başarıyla iade edildi.');
-      } catch (error) {
-        console.error('İade işlemi sırasında hata:', error);
-        alert('İade işlemi sırasında bir hata oluştu!');
-      }
-    },
-    async loadUserReturns() {
-      if (!this.loggedInUser) return;
+const canReturn = (orderDate: Date): boolean => {
+  const returnPeriod = 14 // 14 gün
+  const currentDate = new Date()
+  const orderDateObj = new Date(orderDate)
+  const diffTime = Math.abs(currentDate.getTime() - orderDateObj.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  return diffDays <= returnPeriod
+}
 
-      try {
-        const { $db } = useNuxtApp();
-        const returnsRef = collection($db, 'returns');
-        const q = query(returnsRef, where('userId', '==', this.loggedInUser.id));
-        const querySnapshot = await getDocs(q);
-        
-        // Tüm iadeleri grupla (orderId'ye göre)
-        const returnsByOrder = {};
-        querySnapshot.docs.forEach(doc => {
-          const data = doc.data();
-          const orderId = data.orderId;
-          
-          if (!returnsByOrder[orderId]) {
-            returnsByOrder[orderId] = [];
-          }
-          returnsByOrder[orderId].push({
-            id: doc.id,
-            ...data,
-            returnDate: data.returnDate.toDate(),
-            orderDate: data.orderDate ? data.orderDate.toDate() : data.returnDate.toDate()
-          });
-        });
+const isOrderFullyReturned = (orderId: string): boolean => {
+  const order = userOrders.value.find(o => o.id === orderId)
+  if (!order) return false
+  return order.items.every((item: OrderItem) => item.isReturned)
+}
 
-        // Her sipariş için tüm iade edilen ürünleri birleştir
-        this.userReturns = Object.entries(returnsByOrder).map(([orderId, returns]) => {
-          // Tüm iadelerdeki ürünleri birleştir
-          const allItems = returns.reduce((acc, return_) => {
-            return_.items.forEach(item => {
-              // Aynı ürün daha önce eklenmemişse ekle
-              const existingItem = acc.find(i => 
-                i.productId === item.productId && 
-                i.size === item.size
-              );
-              if (!existingItem) {
-                acc.push(item);
-              }
-            });
-            return acc;
-          }, []);
-
-          // En son iade tarihini al
-          const latestReturn = returns.reduce((latest, current) => 
-            latest.returnDate > current.returnDate ? latest : current
-          );
-
-          // Toplam iade tutarını hesapla (her ürün için sadece bir kez)
-          const totalAmount = allItems.reduce((total, item) => total + item.totalPrice, 0);
-
-          return {
-            id: latestReturn.id,
-            orderId: orderId,
-            userId: latestReturn.userId,
-            items: allItems,
-            totalAmount: totalAmount,
-            returnDate: latestReturn.returnDate,
-            orderDate: latestReturn.orderDate,
-            isFullReturn: this.isOrderFullyReturned(orderId)
-          };
-        });
-
-        // İadeleri tarihe göre sırala (en yeniden en eskiye)
-        this.userReturns.sort((a, b) => b.returnDate - a.returnDate);
-      } catch (error) {
-        console.error('İadeler yüklenirken hata:', error);
-      }
-    },
-    // Ürünün iade edilip edilmediğini kontrol et
-    isProductReturned(orderId, productId) {
-      return this.userReturns.some(return_ => 
-        return_.orderId === orderId && 
-        return_.items.some(item => item.productId === productId)
-      );
-    },
-    // Siparişin tamamen iade edilip edilmediğini kontrol et
-    isOrderFullyReturned(orderId) {
-      const returns = this.userReturns.filter(return_ => return_.orderId === orderId);
-      if (returns.length === 0) return false;
-
-      // İlgili siparişi bul
-      const order = this.userOrders.find(order => order.id === orderId);
-      if (!order) return false;
-
-      // Siparişteki her ürünün iade edilip edilmediğini kontrol et
-      return order.items.every(orderItem => {
-        // Her bir ürün için iade kaydı var mı kontrol et
-        return returns.some(return_ => 
-          return_.items.some(returnItem => 
-            returnItem.productId === orderItem.productId && 
-            returnItem.size === orderItem.size
-          )
-        );
-      });
-    },
-    async loadCustomerServices() {
-      try {
-        this.loading = true;
-        const { $db } = useNuxtApp();
-        const customerServicesRef = collection($db, 'customer-services');
-        const querySnapshot = await getDocs(customerServicesRef);
-        
-        if (!querySnapshot.empty) {
-          const data = querySnapshot.docs[0].data();
-          this.contactInfo = {
-            email: data.email || '',
-            phone: data.phone || '',
-            workingHours: data.workingHours || '',
-            address: data.address || ''
-          };
-        }
-      } catch (error) {
-        console.error('Müşteri hizmetleri bilgileri yüklenirken hata:', error);
-      } finally {
-        this.loading = false;
-      }
-    },
-  },
-  mounted() {
-    this.checkLoggedInUser();
-    // Eğer kullanıcı giriş yapmışsa iadeleri yükle
-    if (this.loggedInUser) {
-        this.loadUserReturns();
-    }
-  },
-  components: {
-    LoginForm,
-    RegisterForm,
-  },
-};
+// Lifecycle hooks
+onMounted(() => {
+  authStore.checkAuth()
+  if (loggedInUser.value) {
+    const { $db } = useNuxtApp()
+    authStore.loadUserReturns($db as Firestore)
+  }
+})
 </script>
 
 <style scoped>
 .top-right-button {
   position: absolute;
-  top: 10px;
+  top: 50px;
   right: 110px;
   padding: 5px 20px;
   display: absolute;
@@ -577,6 +303,8 @@ export default {
   cursor: pointer;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   transition: background-color 0.3s ease;
+  z-index: 1000;
+
 }
 
 .top-right-button:hover {

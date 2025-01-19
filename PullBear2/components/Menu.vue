@@ -1,5 +1,5 @@
 <template>
-  <div class="menu-container">
+  <div :class="['menu-container', { 'menu-container-newproducts': isNewProducts }]">
     <!-- Menü İkonu (Yatay Üç Çizgi) -->
     <button
       type="button"
@@ -73,84 +73,102 @@
   </div>
 </template>
 
-<script>
-export default {
-  data() {
-    return {
-      isSidebarVisible: false, // Menü paneli başlangıçta gizli
-      selectedCategory: 'men',  
-      menItems: ['T-Shirt ve Gömlek', 'Jean ve Pantolon', 'Ceket ve Mont', 'Sweatshirt ve Kazak'], // Erkek kıyafetleri
-      womenItems: ['T-Shirt ve Gömlek', 'Jean ve Pantolon', 'Ceket ve Mont', 'Sweatshirt ve Kazak'], // Kadın kıyafetleri
-    };
-  },
-  methods: {
-    toggleSidebar() {
-      this.isSidebarVisible = !this.isSidebarVisible; // Menü panelini açma/kapama
-    },
-    selectCategory(category) {
-      this.selectedCategory = category; // Seçilen kategoriyi belirleme
-    },
-    selectItem(item) {
-      // Menüyü kapat
-      this.toggleSidebar();
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-      // Seçilen öğeye göre yönlendirme yap
-      let route = '';
-      if (this.selectedCategory === 'men') {
-        switch(item) {
-          case 'T-Shirt ve Gömlek':
-            route = '/Giyim/Men/Tshirts';
-            break;
-          case 'Jean ve Pantolon':
-            route = '/Giyim/Men/Jeans';
-            break;
-          case 'Ceket ve Mont':
-            route = '/Giyim/Men/Jackets';
-            break;
-          case 'Sweatshirt ve Kazak':
-            route = '/Giyim/Men/Sweatshirts';
-            break;
-        }
-      } else if (this.selectedCategory === 'women') {
-        switch(item) {
-          case 'T-Shirt ve Gömlek':
-            route = '/Giyim/Women/Tshirts';
-            break;
-          case 'Jean ve Pantolon':
-            route = '/Giyim/Women/Jeans';
-            break;
-          case 'Ceket ve Mont':
-            route = '/Giyim/Women/Jackets';
-            break;
-          case 'Sweatshirt ve Kazak':
-            route = '/Giyim/Women/Sweatshirts';
-            break;
-        }
-      }
-      
-      // Yönlendirme yap
-      if (route) {
-        this.$router.push(route);
-      }
-    },
-    navigateToPage(category) {
-      const route = category === 'men' ? '/Men' : '/Women';
-      
-      this.toggleSidebar(); // Menüyü kapat
-      this.$router.push(route);
+interface Props {
+  isNewProducts?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  isNewProducts: false
+})
+
+const router = useRouter()
+
+const isSidebarVisible = ref<boolean>(false)
+const selectedCategory = ref<'men' | 'women' | null>('men')
+
+const menItems = ['T-Shirt ve Gömlek', 'Jean ve Pantolon', 'Ceket ve Mont', 'Sweatshirt ve Kazak']
+const womenItems = ['T-Shirt ve Gömlek', 'Jean ve Pantolon', 'Ceket ve Mont', 'Sweatshirt ve Kazak']
+
+const toggleSidebar = (): void => {
+  isSidebarVisible.value = !isSidebarVisible.value
+}
+
+const selectCategory = (category: 'men' | 'women'): void => {
+  selectedCategory.value = category
+}
+
+const selectItem = (item: string): void => {
+  toggleSidebar()
+
+  let route = ''
+  if (selectedCategory.value === 'men') {
+    switch(item) {
+      case 'T-Shirt ve Gömlek':
+        route = '/Giyim/Men/Tshirts'
+        break
+      case 'Jean ve Pantolon':
+        route = '/Giyim/Men/Jeans'
+        break
+      case 'Ceket ve Mont':
+        route = '/Giyim/Men/Jackets'
+        break
+      case 'Sweatshirt ve Kazak':
+        route = '/Giyim/Men/Sweatshirts'
+        break
+    }
+  } else if (selectedCategory.value === 'women') {
+    switch(item) {
+      case 'T-Shirt ve Gömlek':
+        route = '/Giyim/Women/Tshirts'
+        break
+      case 'Jean ve Pantolon':
+        route = '/Giyim/Women/Jeans'
+        break
+      case 'Ceket ve Mont':
+        route = '/Giyim/Women/Jackets'
+        break
+      case 'Sweatshirt ve Kazak':
+        route = '/Giyim/Women/Sweatshirts'
+        break
     }
   }
-};
+  
+  if (route) {
+    router.push(route)
+  }
+}
+
+const navigateToPage = (category: 'men' | 'women'): void => {
+  const route = category === 'men' ? '/Men' : '/Women'
+  toggleSidebar()
+  router.push(route)
+}
 </script>
 
 <style scoped>
-
 /* Menü Konteyneri */
 .menu-container {
   display: flex;
   align-items: center;
   cursor: pointer;
   flex: 0 0 auto;
+  position: relative;
+  top: 50px;
+  z-index: 1000;
+}
+
+.menu-container-newproducts {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  position: relative;
+  top: -30px;
+  z-index: 998;
 }
 
 /* Menü İkonu */
@@ -178,8 +196,64 @@ export default {
   display: flex;
   flex-direction: column;
   z-index: 1000;
-  transform: translateX(-100%); /* Başlangıçta gizli olacak */
+  transform: translateX(-100%);
   transition: transform 0.3s ease;
+}
+
+/* Mobil Tasarım */
+@media screen and (max-width: 768px) {
+  .menu-container {
+    top: 30px;
+    left: 10px;
+  }
+
+  .menu-container-newproducts {
+    top: -20px;
+    left: 10px;
+  }
+
+  .menu-panel {
+    width: 100%;
+  }
+
+  .menu-panel-header {
+    padding: 15px;
+  }
+
+  .gender-selection {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .gender-button {
+    width: 100%;
+  }
+
+  ul li {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+  }
+}
+
+/* Küçük Mobil Cihazlar */
+@media screen and (max-width: 480px) {
+  .menu-container {
+    top: 20px;
+    left: 5px;
+  }
+
+  .menu-panel-header h2 {
+    font-size: 18px;
+  }
+
+  .gender-button {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  ul li {
+    font-size: 14px;
+  }
 }
 
 /* Panel Başlığı */

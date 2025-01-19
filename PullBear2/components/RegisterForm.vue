@@ -7,106 +7,105 @@
         <input v-model="email" type="email" placeholder="E-posta" required />
         <input v-model="password" type="password" placeholder="Şifre" required />
         <button type="submit" class="form-button">Kayıt Ol</button>
-        <button type="button" @click="$emit('back')" class="form-button">Geri</button>
+        <button type="button" @click="emit('back')" class="form-button">Geri</button>
       </form>
       <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
       <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
     </div>
-  </template>
+</template>
   
-  <script>
-  import { collection, query, where, getDocs, addDoc } from 'firebase/firestore';
-  import { useNuxtApp } from '#app';
+<script setup lang="ts">
+import { ref } from 'vue'
+import { collection, query, where, getDocs, addDoc } from 'firebase/firestore'
+import { useNuxtApp } from '#app'
+import type { Firestore } from 'firebase/firestore'
+import type { User } from '~/stores/auth'
 
-  export default {
-    data() {
-      return {
-        name: "",
-        surname: "",
-        email: "",
-        password: "",
-        errorMessage: "",
-        successMessage: "",
-      };
-    },
-    methods: {
-      async register() {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const { $db } = useNuxtApp()
+const db = $db as Firestore
+
+const name = ref<string>("")
+const surname = ref<string>("")
+const email = ref<string>("")
+const password = ref<string>("")
+const errorMessage = ref<string>("")
+const successMessage = ref<string>("")
+
+const emit = defineEmits<{
+  (e: 'register', userData: User): void
+  (e: 'back'): void
+}>()
+
+const register = async (): Promise<void> => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+  if (!name.value || !surname.value || !email.value || !password.value) {
+    errorMessage.value = "Lütfen tüm alanları doldurun!"
+    successMessage.value = ""
+    return
+  }
+
+  if (!emailRegex.test(email.value)) {
+    errorMessage.value = "Lütfen geçerli bir e-posta adresi girin!"
+    successMessage.value = ""
+    return
+  }
+
+  try {
+    // E-posta adresi kontrolü
+    const usersRef = collection(db, 'users')
+    const q = query(usersRef, where('email', '==', email.value))
+    const querySnapshot = await getDocs(q)
+    
+    if (!querySnapshot.empty) {
+      errorMessage.value = "Bu e-posta adresi zaten kayıtlı!"
+      successMessage.value = ""
+      return
+    }
+
+    // Yeni kullanıcı oluştur
+    const newUser = {
+      name: name.value,
+      surname: surname.value,
+      email: email.value,
+      password: password.value,
+      createdAt: new Date()
+    }
+
+    const docRef = await addDoc(collection(db, 'users'), newUser)
+    
+    // Başarı mesajını göster
+    successMessage.value = "Kayıt başarılı! Giriş yapılıyor..."
+    errorMessage.value = ""
+
+    // Kullanıcı ID'sini ekleyerek emit et ve otomatik giriş yap
+    const userData = { id: docRef.id, ...newUser } as User
+    emit("register", userData)
+
+    // Formu sıfırla
+    name.value = ""
+    surname.value = ""
+    email.value = ""
+    password.value = ""
+  } catch (error) {
+    console.error('Kayıt hatası:', error)
+    errorMessage.value = "Kayıt olurken bir hata oluştu!"
+    successMessage.value = ""
+  }
+}
+</script>
   
-        if (!this.name || !this.surname || !this.email || !this.password) {
-          this.errorMessage = "Lütfen tüm alanları doldurun!";
-          this.successMessage = "";
-          return;
-        }
-  
-        if (!emailRegex.test(this.email)) {
-          this.errorMessage = "Lütfen geçerli bir e-posta adresi girin!";
-          this.successMessage = "";
-          return;
-        }
-
-        try {
-          const { $db } = useNuxtApp();
-          
-          // E-posta adresi kontrolü
-          const usersRef = collection($db, 'users');
-          const q = query(usersRef, where('email', '==', this.email));
-          const querySnapshot = await getDocs(q);
-          
-          if (!querySnapshot.empty) {
-            this.errorMessage = "Bu e-posta adresi zaten kayıtlı!";
-            this.successMessage = "";
-            return;
-          }
-
-          // Yeni kullanıcı oluştur
-          const newUser = {
-            name: this.name,
-            surname: this.surname,
-            email: this.email,
-            password: this.password,
-            createdAt: new Date()
-          };
-
-          const docRef = await addDoc(collection($db, 'users'), newUser);
-          
-          // Başarı mesajını göster
-          this.successMessage = "Kayıt başarılı! Giriş yapılıyor...";
-          this.errorMessage = "";
-
-          // Kullanıcı ID'sini ekleyerek emit et ve otomatik giriş yap
-          const userData = { id: docRef.id, ...newUser };
-          this.$emit("register", userData);
-
-          // Formu sıfırla
-          this.name = "";
-          this.surname = "";
-          this.email = "";
-          this.password = "";
-        } catch (error) {
-          console.error('Kayıt hatası:', error);
-          this.errorMessage = "Kayıt olurken bir hata oluştu!";
-          this.successMessage = "";
-        }
-      },
-    },
-  };
-  </script>
-  
- 
-
-  
-  <style scoped>
-  .register-form {
+<style scoped>
+.register-form {
   display: flex;
   flex-direction: column;
 }
 
 .form-button {
-  display: block; /* Alt alta durmalarını sağlar */
-  width: 100%; /* Butonların form genişliğini kaplamasını sağlar */
+  display: block;
+  width: 100%;
   padding: 10px;
-  margin: 10px 0; /* Butonlar arasında boşluk bırakır */
+  margin: 10px 0;
   background-color: #000000;
   color: white;
   border: none;
@@ -117,42 +116,45 @@
 .form-button:hover {
   background-color: #000000;
 }
-  .form-container {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-width: 300px;
-    margin: 50px auto;
-  }
-  
-  input {
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-  }
-  
-  button {
-    padding: 10px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-  
-  button:hover {
-    background-color: #000000;
-    color: white;
-  }
-  
-  .back-button {
-    background-color: #929292;
-    color: white;
-  }
-  .error-message {
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 300px;
+  margin: 50px auto;
+}
+
+input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+button {
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #000000;
+  color: white;
+}
+
+.back-button {
+  background-color: #929292;
+  color: white;
+}
+
+.error-message {
   color: red;
   margin-top: 10px;
 }
-  .success-message {
-    color: green;
-    margin-top: 10px;
-  }
-  </style>
+
+.success-message {
+  color: green;
+  margin-top: 10px;
+}
+</style>

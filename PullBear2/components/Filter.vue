@@ -33,43 +33,42 @@
     </div>
   </template>
   
-  <script>
-  export default {
-    data() {
-      return {
-        selectedFilter: 'all', // Varsayılan olarak "Tümünü Gör"
-      };
-    },
-    methods: {
-      applyFilter(filter) {
-        this.selectedFilter = filter;
-        this.$emit('filter-changed', filter); // Parent component'e filtreyi gönderir
-      },
-    },
-  };
-  </script>
+<script setup lang="ts">
+import { ref } from 'vue'
+
+type FilterType = 'all' | 'jeans' | 'jackets' | 'sweatshirts' | 'tshirts'
+
+const emit = defineEmits<{
+  (e: 'filter-changed', filter: FilterType): void
+}>()
+
+const selectedFilter = ref<FilterType>('all')
+
+const applyFilter = (filter: FilterType): void => {
+  selectedFilter.value = filter
+  emit('filter-changed', filter)
+}
+</script>
   
-  <style scoped>
-  .filter-buttons {
-    display: flex;
-    justify-content: space-around;
-    margin-bottom: 20px;
-  }
-  
-  button {
-    padding: 10px;
-    border: none;
-    cursor: pointer;
-    background-color: #f1f1f1;
-    font-size: 14px;
-    border-radius: 100px;
-  }
-  
-  button.active {
-    background-color: #000;
-    color: white;
-  }
-  
- 
-  </style>
+<style scoped>
+.filter-buttons {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 20px;
+}
+
+button {
+  padding: 10px;
+  border: none;
+  cursor: pointer;
+  background-color: #f1f1f1;
+  font-size: 14px;
+  border-radius: 100px;
+}
+
+button.active {
+  background-color: #000;
+  color: white;
+}
+</style>
   

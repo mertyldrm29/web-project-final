@@ -9,25 +9,29 @@
     </div>
   </template>
   
-  <script setup>
+  <script setup lang="ts">
   import { ref, onMounted } from 'vue'
   import { useRouter } from 'vue-router'
   import { useNuxtApp } from '#app'
-  import { collection, getDocs, query, limit } from 'firebase/firestore'
+  import { collection, getDocs, query, limit, Firestore } from 'firebase/firestore'
+  
+  interface Banner {
+    imageUrl: string;
+  }
   
   const router = useRouter()
-  const imageUrl = ref('')
+  const imageUrl = ref<string>('')
   
   // Firestore'dan resim URL'sini al
-  const fetchImageUrl = async () => {
+  const fetchImageUrl = async (): Promise<void> => {
     try {
       const { $db } = useNuxtApp()
-      const bannerRef = collection($db, 'banners')
+      const bannerRef = collection($db as Firestore, 'banners')
       const q = query(bannerRef, limit(1)) // İlk banner'ı al
       const querySnapshot = await getDocs(q)
       
       if (!querySnapshot.empty) {
-        const bannerData = querySnapshot.docs[0].data()
+        const bannerData = querySnapshot.docs[0].data() as Banner
         imageUrl.value = bannerData.imageUrl
       }
     } catch (error) {
@@ -36,7 +40,7 @@
   }
   
   // Yeni ürünler sayfasına yönlendirme
-  const navigateToNewProducts = () => {
+  const navigateToNewProducts = (): void => {
     router.push('/new-products')
   }
   
@@ -53,6 +57,7 @@
     width: 100%;
     margin: 0 auto;
     overflow: hidden;
+    top: -20px;
   }
   
   /* Arka plan resmi */

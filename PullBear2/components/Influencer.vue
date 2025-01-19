@@ -16,14 +16,22 @@
     </div>
   </template>
   
-  <script setup>
+  <script setup lang="ts">
   import { ref, onMounted } from 'vue'
   import { useNuxtApp } from '#app'
-  import { collection, query, getDocs, orderBy, where } from 'firebase/firestore'
+  import { collection, query, getDocs, orderBy, where, Firestore } from 'firebase/firestore'
 
-  const influencers = ref([])
+  interface Influencer {
+    id: string;
+    name: string;
+    image: string;
+    url: string;
+    order: number;
+  }
 
-  const fetchInfluencers = async () => {
+  const influencers = ref<Influencer[]>([])
+
+  const fetchInfluencers = async (): Promise<void> => {
     try {
       console.log('Influencer verileri yükleniyor...')
       const { $db } = useNuxtApp()
@@ -33,7 +41,7 @@
       }
       console.log('Firestore bağlantısı başarılı')
 
-      const influencersRef = collection($db, 'influencers')
+      const influencersRef = collection($db as Firestore, 'influencers')
       const q = query(
         influencersRef,
         orderBy('order', 'asc')
@@ -45,15 +53,15 @@
       influencers.value = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }))
+      } as Influencer))
       
       console.log('İşlenen influencer verileri:', influencers.value)
     } catch (error) {
       console.error('Influencer\'lar yüklenirken hata:', error)
       console.error('Hata detayı:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack
+        message: (error as Error).message,
+        code: (error as { code?: string }).code,
+        stack: (error as Error).stack
       })
     }
   }

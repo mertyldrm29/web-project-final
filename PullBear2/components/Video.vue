@@ -23,21 +23,30 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useNuxtApp } from '#app'
 import { useRouter } from 'vue-router'
-import { collection, query, getDocs, where, limit } from 'firebase/firestore'
+import { collection, query, getDocs, where, limit, type Firestore, type DocumentData } from 'firebase/firestore'
+
+interface MediaData {
+  id?: string;
+  videoUrl: string;
+  imageUrl: string;
+  videoClickUrl: string;
+  imageClickUrl: string;
+  isActive?: boolean;
+}
 
 const router = useRouter()
-const mediaData = ref({
+const mediaData = ref<MediaData>({
   videoUrl: '',
   imageUrl: '',
   videoClickUrl: '',
   imageClickUrl: ''
 })
 
-const navigateTo = (url) => {
+const navigateTo = (url: string): void => {
   if (url) {
     if (url.startsWith('http')) {
       window.open(url, '_blank')
@@ -47,7 +56,7 @@ const navigateTo = (url) => {
   }
 }
 
-const fetchMediaData = async () => {
+const fetchMediaData = async (): Promise<void> => {
   try {
     console.log('Media verileri yükleniyor...')
     const { $db } = useNuxtApp()
@@ -56,7 +65,7 @@ const fetchMediaData = async () => {
       return
     }
 
-    const mediaRef = collection($db, 'media')
+    const mediaRef = collection($db as Firestore, 'media')
     const q = query(
       mediaRef,
       where('isActive', '==', true),
@@ -68,7 +77,7 @@ const fetchMediaData = async () => {
       const doc = querySnapshot.docs[0]
       mediaData.value = {
         id: doc.id,
-        ...doc.data()
+        ...(doc.data() as Omit<MediaData, 'id'>)
       }
       console.log('Media verileri yüklendi:', mediaData.value)
     }

@@ -34,14 +34,38 @@
   </footer>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useNuxtApp } from '#app'
 import { collection, query, getDocs, where, limit } from 'firebase/firestore'
+import type { Firestore } from 'firebase/firestore'
 
-const footerData = ref(null)
+interface Link {
+  url: string
+  imageUrl: string
+  alt: string
+}
 
-const fetchFooterData = async () => {
+interface PaymentMethod {
+  imageUrl: string
+  alt: string
+}
+
+interface FooterSection {
+  title: string
+  type: 'app' | 'payment' | 'social'
+  links?: Link[]
+  methods?: PaymentMethod[]
+}
+
+interface FooterData {
+  sections: FooterSection[]
+  isActive: boolean
+}
+
+const footerData = ref<FooterData | null>(null)
+
+const fetchFooterData = async (): Promise<void> => {
   try {
     console.log('Footer verileri yükleniyor...')
     const { $db } = useNuxtApp()
@@ -50,7 +74,8 @@ const fetchFooterData = async () => {
       return
     }
 
-    const footerRef = collection($db, 'footer')
+    const db = $db as Firestore
+    const footerRef = collection(db, 'footer')
     const q = query(
       footerRef,
       where('isActive', '==', true),
@@ -60,7 +85,7 @@ const fetchFooterData = async () => {
     const querySnapshot = await getDocs(q)
     if (!querySnapshot.empty) {
       const doc = querySnapshot.docs[0]
-      footerData.value = doc.data()
+      footerData.value = doc.data() as FooterData
       console.log('Footer verileri yüklendi:', footerData.value)
     }
   } catch (error) {

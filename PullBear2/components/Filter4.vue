@@ -22,19 +22,20 @@
     </div>
   </template>
   
-  <script>
-  export default {
-    data() {
-      return {
-        subJeans: 'all', // Varsayılan olarak "Tümünü Gör"
-      };
-    },
-    methods: {
-      applyFilter(filter4) {
-        this.subJeans = filter4;
-        this.$emit('filter-changed', filter4); // Parent component'e filtreyi gönderir
-      },
-    },
+  <script setup lang="ts">
+  import { ref } from 'vue';
+
+  type SubJeansType = 'all' | 'jean' | 'pantolon';
+
+  const subJeans = ref<SubJeansType>('all');
+
+  const emit = defineEmits<{
+    (e: 'filter-changed', filter: SubJeansType): void
+  }>();
+
+  const applyFilter = (filter: SubJeansType): void => {
+    subJeans.value = filter;
+    emit('filter-changed', filter);
   };
   </script>
   

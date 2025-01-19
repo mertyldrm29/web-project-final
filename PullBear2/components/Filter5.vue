@@ -28,19 +28,20 @@
     </div>
   </template>
   
-  <script>
-  export default {
-    data() {
-      return {
-        subJackets: 'all', // Varsayılan olarak "Tümünü Gör"
-      };
-    },
-    methods: {
-      applyFilter(filter5) {
-        this.subJackets = filter5;
-        this.$emit('filter-changed', filter5); // Parent component'e filtreyi gönderir
-      },
-    },
+  <script setup lang="ts">
+  import { ref } from 'vue';
+
+  type SubJacketsType = 'all' | 'ceket' | 'mont' | 'kaban';
+
+  const subJackets = ref<SubJacketsType>('all');
+
+  const emit = defineEmits<{
+    (e: 'filter-changed', filter: SubJacketsType): void
+  }>();
+
+  const applyFilter = (filter: SubJacketsType): void => {
+    subJackets.value = filter;
+    emit('filter-changed', filter);
   };
   </script>
   

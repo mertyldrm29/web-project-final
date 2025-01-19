@@ -23,19 +23,20 @@
     </div>
   </template>
   
-  <script>
-  export default {
-    data() {
-      return {
-        chosenFilter: 'all', // Varsayılan olarak "Tümünü Gör"
-      };
-    },
-    methods: {
-      applyFilter(filter2) {
-        this.chosenFilter = filter2;
-        this.$emit('filter-changed', filter2); // Parent component'e filtreyi gönderir
-      },
-    },
+  <script setup lang="ts">
+  import { ref } from 'vue';
+
+  type FilterType = 'all' | 'men' | 'women';
+
+  const chosenFilter = ref<FilterType>('all');
+
+  const emit = defineEmits<{
+    (e: 'filter-changed', filter: FilterType): void
+  }>();
+
+  const applyFilter = (filter: FilterType): void => {
+    chosenFilter.value = filter;
+    emit('filter-changed', filter);
   };
   </script>
   

@@ -25,8 +25,9 @@
               stroke-linecap="round"
             ></path>
           </svg>
+          <span class="count">Sepet ({{ totalItems }})</span>
         </span>
-        <span class="count">Sepet ({{ totalItems }})</span>
+        
       </span>
     </button>
 
@@ -71,375 +72,127 @@
   </div>
 </template>
 
-<script>
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
-import { useNuxtApp } from '#app';
+<script setup lang="ts">
+import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { useCartStore } from '~/stores/cart'
+import { useAuthStore } from '~/stores/auth'
+import { storeToRefs } from 'pinia'
+import { useNuxtApp } from '#app'
+import type { Firestore } from 'firebase/firestore'
 
-export default {
-  data() {
-    return {
-      cartItems: [],
-      isCartOpen: false,
-      unsubscribe: null,
-      loggedInUser: null,
-      authCheckInterval: null
-    };
-  },
-  watch: {
-    // localStorage'daki kullanıcı değişikliklerini izle
-    '$data.loggedInUser': {
-      handler(newUser) {
-        this.setupCartListener(); // Kullanıcı değiştiğinde sepeti güncelle
-        if (!newUser) {
-          // Kullanıcı çıkış yaptığında sepet panelini kapat
-          this.isCartOpen = false;
-        }
-      },
-      deep: true
-    }
-  },
-  computed: {
-    calculateTotal() {
-      return this.cartItems.reduce((total, item) => total + item.totalPrice, 0);
-    },
-    canPlaceOrder() {
-      return this.cartItems.length > 0 && this.loggedInUser;
-    },
-    totalItems() {
-      return this.cartItems.reduce((total, item) => total + item.quantity, 0);
-    }
-  },
-  methods: {
-    checkAuthStatus() {
-      const savedUser = localStorage.getItem('loggedInUser');
-      if (!savedUser && this.loggedInUser) {
-        // Kullanıcı çıkış yapmış
-        this.handleUserLogout();
-      } else if (savedUser && !this.loggedInUser) {
-        // Kullanıcı giriş yapmış
-        this.handleUserLogin(JSON.parse(savedUser));
-      }
-    },
-    async handleUserLogin(user) {
-      this.loggedInUser = user;
-      await this.setupCartListener();
-      // Kullanıcı giriş yaptığında mevcut sepeti kontrol et
-      await this.checkAndUpdateCart();
-    },
-    async handleUserLogout() {
-      this.loggedInUser = null;
-      await this.setupCartListener();
-      this.isCartOpen = false;
-    },
-    async checkAndUpdateCart() {
-      try {
-        const { $db } = useNuxtApp();
-        const cartRef = collection($db, 'cart');
-        const userId = this.loggedInUser ? this.loggedInUser.id : '1';
-        
-        // Eski kullanıcının (userId = '1') sepetindeki ürünleri al
-        const oldCartQuery = query(cartRef, where('userId', '==', String('1')));
-        const oldCartSnapshot = await getDocs(oldCartQuery);
-        
-        // Eğer eski sepette ürün varsa ve kullanıcı giriş yapmışsa
-        if (!oldCartSnapshot.empty && this.loggedInUser) {
-          // Eski sepetteki ürünleri yeni kullanıcıya taşı
-          const updatePromises = oldCartSnapshot.docs.map(async (doc) => {
-            const itemData = doc.data();
-            // Önce eski ürünü sil
-            await deleteDoc(doc.ref);
-            // Sonra yeni kullanıcı ID'si ile ekle
-            await addDoc(cartRef, {
-              ...itemData,
-              userId: String(this.loggedInUser.id)
-            });
-          });
-          
-          await Promise.all(updatePromises);
-        }
-      } catch (error) {
-        console.error('Sepet güncelleme hatası:', error);
-      }
-    },
-    async setupCartListener() {
-      try {
-        const { $db } = useNuxtApp();
-        const cartRef = collection($db, 'cart');
-        
-        // Önceki listener'ı temizle
-        if (this.unsubscribe) {
-          this.unsubscribe();
-        }
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  size: string;
+  quantity: number;
+  totalPrice: number;
+  userId: string;
+  productId: string;
+}
 
-        // Kullanıcıya özel sorgu oluştur
-        const userId = this.loggedInUser ? String(this.loggedInUser.id) : '1';
-        const q = query(cartRef, where('userId', '==', userId));
+interface User {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
+}
 
-        // Yeni listener ekle
-        this.unsubscribe = onSnapshot(q, (snapshot) => {
-          this.cartItems = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-        }, (error) => {
-          console.error('Sepet dinlenirken hata:', error);
-        });
-      } catch (error) {
-        console.error('Sepet listener kurulum hatası:', error);
-      }
-    },
-    toggleCart() {
-      this.isCartOpen = !this.isCartOpen;
-    },
-    async increaseQuantity(item) {
-      try {
-        const { $db } = useNuxtApp();
-        
-        // Önce ürünün ID'sini bulmak için products koleksiyonunu sorgula
-        const productsRef = collection($db, 'products');
-        const q = query(productsRef, where('id', '==', Number(item.productId)));
-        const querySnapshot = await getDocs(q);
-        
-        if (querySnapshot.empty) {
-          console.error('Ürün bulunamadı:', item.productId);
-          alert('Ürün bulunamadı! Lütfen sayfayı yenileyip tekrar deneyin.');
-          return;
-        }
+const cartStore = useCartStore()
+const authStore = useAuthStore()
+const { loggedInUser } = storeToRefs(authStore)
+const { cartItems, isCartOpen, loading, error } = storeToRefs(cartStore)
 
-        // Her ürünün sadece 1 stoğu olduğu için artırma işlemi yapılamaz
-        alert('Bu ürünün stoğu tükenmiştir!');
-        return;
+const totalItems = computed(() => cartStore.totalItems)
+const calculateTotal = computed(() => cartStore.totalAmount)
+const canPlaceOrder = computed(() => cartItems.value?.length > 0 && loggedInUser.value)
 
-        /* Eski stok kontrolü ve artırma kodu
-        const productDoc = querySnapshot.docs[0];
-        const product = productDoc.data();
-        
-        if (product.sizes[item.size] === 0) {
-          alert('Bu bedende ürün tükendi!');
-          return;
-        }
-        
-        const newQuantity = item.quantity + 1;
-        const newTotalPrice = item.price * newQuantity;
-        
-        // Sepetteki ürün miktarını güncelle
-        await updateDoc(doc($db, 'cart', String(item.id)), {
-          quantity: newQuantity,
-          totalPrice: newTotalPrice
-        });
-        
-        // Stok durumunu güncelle
-        await updateDoc(doc($db, 'products', productDoc.id), {
-          [`sizes.${item.size}`]: 0
-        });
-        */
-      } catch (error) {
-        console.error('Miktar artırılırken hata:', error);
-      }
-    },
-    async decreaseQuantity(item) {
-      if (item.quantity <= 1) return;
-      
-      try {
-        const { $db } = useNuxtApp();
-        const newQuantity = item.quantity - 1;
-        const newTotalPrice = item.price * newQuantity;
-        
-        // Sepetteki ürün miktarını güncelle
-        await updateDoc(doc($db, 'cart', String(item.id)), {
-          quantity: newQuantity,
-          totalPrice: newTotalPrice
-        });
-        
-        // Eğer ürün sepetten tamamen çıkarılıyorsa stok durumunu güncelle
-        if (newQuantity === 0) {
-          const productRef = doc($db, 'products', String(item.productId));
-          const productDoc = await getDoc(productRef);
-          
-          if (productDoc.exists()) {
-            await updateDoc(productRef, {
-              [`sizes.${item.size}`]: 1 // Ürün sepetten çıkarıldığında stok mevcut olur
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Miktar azaltılırken hata:', error);
-      }
-    },
-    async removeFromCart(item) {
-      try {
-        const { $db } = useNuxtApp();
-        
-        // Ürünün Firestore ID'sini bul
-        const productsRef = collection($db, 'products');
-        const q = query(productsRef, where('id', '==', Number(item.productId)));
-        const querySnapshot = await getDocs(q);
-        
-        if (!querySnapshot.empty) {
-          const productDoc = querySnapshot.docs[0];
-          // Ürün stoğunu tekrar mevcut yap
-          await updateDoc(doc($db, 'products', productDoc.id), {
-            [`sizes.${item.size}`]: 1 // Ürün sepetten çıkarıldığında stok mevcut olur
-          });
-        }
-        
-        // Sepetten ürünü kaldır
-        await deleteDoc(doc($db, 'cart', String(item.id)));
-      } catch (error) {
-        console.error('Ürün sepetten kaldırılırken hata:', error);
-      }
-    },
-    async clearCart(isOrder = false) {
+const toggleCart = (): void => {
+  if (!loggedInUser.value && isCartOpen.value) {
+    cartStore.toggleCart(false)
+    return
+  }
+  cartStore.toggleCart()
+}
+
+const increaseQuantity = async (item: CartItem): Promise<void> => {
   try {
-    const { $db } = useNuxtApp();
-    console.log('clearCart başladı, isOrder:', isOrder);
-
-    // Sepetteki her ürün için işlem yap
-    for (const item of this.cartItems) {
-      try {
-        const productsRef = collection($db, 'products');
-        const q = query(productsRef, where('id', '==', Number(item.productId)));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const productDoc = querySnapshot.docs[0];
-
-          // Ürünün stok bilgilerini güncelle
-          const productData = productDoc.data();
-          const currentSizeStock = productData.sizes[item.size];
-
-          if (currentSizeStock !== undefined) {
-            const updatedSizeStock = currentSizeStock + item.quantity;
-            await updateDoc(doc($db, 'products', productDoc.id), {
-              [`sizes.${item.size}`]: updatedSizeStock,
-            });
-            console.log(`Stok güncellendi: Ürün ID: ${item.productId}, Beden: ${item.size}, Yeni Stok: ${updatedSizeStock}`);
-          } else {
-            console.warn(`Stok bilgisi bulunamadı: Ürün ID: ${item.productId}, Beden: ${item.size}`);
-          }
-        } else {
-          console.warn(`Ürün bulunamadı: ID = ${item.productId}`);
-        }
-
-        // Sepetten ürünü sil
-        await deleteDoc(doc($db, 'cart', String(item.id)));
-        console.log('Ürün sepetten silindi:', item.id);
-      } catch (itemError) {
-        console.error(`Ürün (${item.productId}) temizlenirken hata oluştu:`, itemError);
-      }
-    }
-
-    if (!isOrder) {
-      alert('Sepetiniz temizlendi!');
-    }
-    console.log('clearCart tamamlandı');
+    const { $db } = useNuxtApp()
+    await cartStore.increaseQuantity($db as Firestore, item)
   } catch (error) {
-    console.error('Sepet temizlenirken hata:', error);
-    alert('Sepet temizlenirken bir hata oluştu!');
+    alert('Bu ürünün stoğu tükenmiştir!')
   }
-},
+}
 
+const decreaseQuantity = async (item: CartItem): Promise<void> => {
+  const { $db } = useNuxtApp()
+  await cartStore.decreaseQuantity($db as Firestore, item)
+}
 
-    async placeOrder() {
-      // Sipariş vermeden önce kullanıcı durumunu tekrar kontrol et
-      this.checkAuthStatus();
+const removeFromCart = async (item: CartItem): Promise<void> => {
+  const { $db } = useNuxtApp()
+  await cartStore.removeFromCart($db as Firestore, item)
+}
 
-      if (!this.loggedInUser) {
-        alert('Sipariş vermek için lütfen giriş yapınız.');
-        this.isCartOpen = false; // Sepet panelini kapat
-        return;
-      }
-
-      if (this.cartItems.length === 0) {
-        alert('Sepetiniz boş!');
-        return;
-      }
-
-      try {
-        const { $db } = useNuxtApp();
-
-        // Önce siparişi oluştur
-        const order = {
-          userId: String(this.loggedInUser.id),
-          items: this.cartItems.map(item => ({
-            productId: String(item.productId),
-            name: item.name,
-            price: item.price,
-            quantity: item.quantity,
-            image: item.image,
-            size: item.size,
-            totalPrice: item.totalPrice
-          })),
-          totalAmount: this.calculateTotal,
-          orderDate: new Date(),
-          status: 'completed'
-        };
-
-        // Siparişi Firestore'a kaydet
-        await addDoc(collection($db, 'orders'), order);
-
-        // Stokları güncelle ve sepeti temizle
-        for (const item of this.cartItems) {
-          try {
-            // Ürünün stoğunu güncelle
-            const productsRef = collection($db, 'products');
-            const q = query(productsRef, where('id', '==', Number(item.productId)));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-              const productDoc = querySnapshot.docs[0];
-              // Stok 0 olarak güncelle
-              await updateDoc(doc($db, 'products', productDoc.id), {
-                [`sizes.${item.size}`]: 0
-              });
-              console.log(`Stok sıfırlandı: Ürün ID: ${item.productId}, Beden: ${item.size}`);
-            }
-
-            // Sepetten ürünü sil
-            await deleteDoc(doc($db, 'cart', String(item.id)));
-            console.log(`Ürün sepetten silindi: ${item.id}`);
-          } catch (error) {
-            console.error(`Ürün işlenirken hata: ${item.productId}`, error);
-          }
-        }
-
-        // Sepet panelini kapat
-        this.isCartOpen = false;
-        alert('Siparişiniz başarıyla oluşturuldu!');
-      } catch (error) {
-        console.error('Sipariş oluşturulurken hata:', error);
-        alert('Sipariş oluşturulurken bir hata oluştu!');
-      }
-    }
-  },
-  async mounted() {
-    try {
-      // LocalStorage'dan kullanıcı bilgisini al
-      const savedUser = localStorage.getItem('loggedInUser');
-      if (savedUser) {
-        await this.handleUserLogin(JSON.parse(savedUser));
-      } else {
-        await this.setupCartListener();
-      }
-
-      // Her 1 saniyede bir kullanıcı durumunu kontrol et
-      this.authCheckInterval = setInterval(() => {
-        this.checkAuthStatus();
-      }, 1000);
-    } catch (error) {
-      console.error('Component mount hatası:', error);
-    }
-  },
-  beforeUnmount() {
-    if (this.unsubscribe) {
-      this.unsubscribe();
-    }
-    // Interval'i temizle
-    if (this.authCheckInterval) {
-      clearInterval(this.authCheckInterval);
-    }
+const clearCart = async (): Promise<void> => {
+  try {
+    const { $db } = useNuxtApp()
+    const userId = loggedInUser.value?.id || '1'
+    await cartStore.clearCart($db as Firestore, userId)
+    alert('Sepetiniz temizlendi!')
+  } catch (error) {
+    console.error('Sepet temizlenirken hata:', error)
+    alert('Sepet temizlenirken bir hata oluştu!')
   }
-};
+}
+
+const placeOrder = async (): Promise<void> => {
+  if (!loggedInUser.value) {
+    alert('Sipariş vermek için lütfen giriş yapınız.')
+    cartStore.toggleCart(false)
+    return
+  }
+
+  if (cartItems.value.length === 0) {
+    alert('Sepetiniz boş!')
+    return
+  }
+
+  const { $db } = useNuxtApp()
+  const success = await cartStore.placeOrder($db as Firestore, loggedInUser.value.id)
+  
+  if (success) {
+    cartStore.toggleCart(false)
+    alert('Siparişiniz başarıyla oluşturuldu!')
+  } else {
+    alert('Sipariş oluşturulurken bir hata oluştu!')
+  }
+}
+
+onMounted(async () => {
+  try {
+    const { $db } = useNuxtApp()
+    const savedUser = localStorage.getItem('loggedInUser')
+    
+    if (savedUser) {
+      const user = JSON.parse(savedUser) as User
+      authStore.setUser(user)
+      await cartStore.setupCartListener($db as Firestore, user.id)
+      await cartStore.checkAndUpdateCart($db as Firestore, user.id)
+    } else {
+      await cartStore.setupCartListener($db as Firestore, '1')
+    }
+  } catch (error) {
+    console.error('Component mount hatası:', error)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (cartStore.unsubscribe) {
+    cartStore.unsubscribe()
+  }
+})
 </script>
 
 <style scoped>
@@ -450,9 +203,10 @@ export default {
   display: flex;
   align-items: center;
   position: fixed;
-  top: 10px;
+  top: 55px;
   right: 0px;
-  z-index: 998;
+  z-index: 1000;
+
 }
 
 .button-text {
@@ -591,11 +345,5 @@ export default {
   border: none;
   cursor: pointer;
   font-size: 24px;
-  color: #666;
-}
-
-.close-button:hover {
-  color: #000;
 }
 </style>
-  
