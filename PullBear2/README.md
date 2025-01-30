@@ -1,3 +1,8 @@
+Pull&Bear Alışveriş Sayfası Klonu
+
+
+Projede firebase configleri bulunduğundan firebase'den okuma yazma kapalı durumdadır. Görseller vs. bu yüzden gözükmemektedir.
+
 # Nuxt Minimal Starter
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 ## Setup
